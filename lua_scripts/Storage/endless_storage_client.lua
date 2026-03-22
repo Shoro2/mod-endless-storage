@@ -27,6 +27,7 @@ local CATEGORIES = {
 -- State
 local currentCategory = 1
 local currentItems = {} -- flat: {entry1, amt1, entry2, amt2, ...}
+local searchActive = false
 
 -- Layout constants
 local FRAME_WIDTH = 560
@@ -97,6 +98,9 @@ local categoryButtons = {}
 
 local function SelectCategory(index)
 	currentCategory = index
+	searchActive = false
+	searchBox:SetText("")
+	searchBox:ClearFocus()
 	for i, btn in ipairs(categoryButtons) do
 		if i == index then
 			btn:SetBackdropColor(0.2, 0.3, 0.6, 1)
@@ -149,10 +153,59 @@ for i, catName in ipairs(CATEGORIES) do
 end
 
 ---------------------------------------------------------------------------
+-- Search Box (above item list)
+---------------------------------------------------------------------------
+local searchBox = CreateFrame("EditBox", "EndlessStorageSearchBox", mainFrame, "InputBoxTemplate")
+searchBox:SetWidth(260)
+searchBox:SetHeight(20)
+searchBox:SetPoint("TOPLEFT", catFrame, "TOPRIGHT", 14, 2)
+searchBox:SetAutoFocus(false)
+searchBox:SetMaxLetters(40)
+
+local searchLabel = searchBox:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+searchLabel:SetPoint("LEFT", 6, 0)
+searchLabel:SetText("Search...")
+searchLabel:SetTextColor(0.5, 0.5, 0.5)
+
+searchBox:SetScript("OnTextChanged", function(self)
+	local text = self:GetText()
+	if text == "" then
+		searchLabel:Show()
+		if searchActive then
+			searchActive = false
+			-- Restore category highlight and reload
+			SelectCategory(currentCategory)
+		end
+	else
+		searchLabel:Hide()
+		if string.len(text) >= 2 then
+			searchActive = true
+			-- Deselect all category buttons
+			for i, btn in ipairs(categoryButtons) do
+				btn:SetBackdropColor(0.1, 0.1, 0.1, 0.6)
+				btn.text:SetTextColor(0.8, 0.8, 0.8)
+			end
+			AIO.Handle("EndlessStorage", "Search", text)
+		end
+	end
+end)
+
+searchBox:SetScript("OnEscapePressed", function(self)
+	self:SetText("")
+	self:ClearFocus()
+end)
+
+searchBox:SetScript("OnEditFocusGained", function(self)
+	if self:GetText() == "" then
+		searchLabel:Show()
+	end
+end)
+
+---------------------------------------------------------------------------
 -- Item List Panel (Right Side)
 ---------------------------------------------------------------------------
 local listFrame = CreateFrame("Frame", nil, mainFrame)
-listFrame:SetPoint("TOPLEFT", catFrame, "TOPRIGHT", 8, 0)
+listFrame:SetPoint("TOPLEFT", catFrame, "TOPRIGHT", 8, -24)
 listFrame:SetPoint("BOTTOMRIGHT", mainFrame, "BOTTOMRIGHT", -16, CONTENT_BOTTOM)
 
 -- Background for item list
@@ -221,7 +274,8 @@ local function CreateItemRow(index)
 	withdrawBtn:SetText("Take")
 	withdrawBtn:SetScript("OnClick", function()
 		if row.itemEntry then
-			AIO.Handle("EndlessStorage", "Withdraw", row.itemEntry, currentCategory)
+			local search = searchActive and searchBox:GetText() or nil
+			AIO.Handle("EndlessStorage", "Withdraw", row.itemEntry, currentCategory, search)
 		end
 	end)
 	row.withdrawBtn = withdrawBtn
@@ -352,16 +406,18 @@ end)
 local ES_Client = {}
 
 ES_Client.UpdateItems = function(player, catIndex, items)
-	currentCategory = catIndex
 	currentItems = items or {}
-	-- Update category button highlight
-	for i, btn in ipairs(categoryButtons) do
-		if i == catIndex then
-			btn:SetBackdropColor(0.2, 0.3, 0.6, 1)
-			btn.text:SetTextColor(1, 1, 1)
-		else
-			btn:SetBackdropColor(0.1, 0.1, 0.1, 0.6)
-			btn.text:SetTextColor(0.8, 0.8, 0.8)
+	if not searchActive then
+		currentCategory = catIndex
+		-- Update category button highlight
+		for i, btn in ipairs(categoryButtons) do
+			if i == catIndex then
+				btn:SetBackdropColor(0.2, 0.3, 0.6, 1)
+				btn.text:SetTextColor(1, 1, 1)
+			else
+				btn:SetBackdropColor(0.1, 0.1, 0.1, 0.6)
+				btn.text:SetTextColor(0.8, 0.8, 0.8)
+			end
 		end
 	end
 	RefreshItemList()

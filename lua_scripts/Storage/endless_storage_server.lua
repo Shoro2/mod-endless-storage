@@ -46,12 +46,13 @@ local function GetItemTemplateInfo(entry)
 	if itemInfoCache[entry] then
 		return itemInfoCache[entry]
 	end
-	local q = WorldDBQuery("SELECT class, subclass, stackable FROM item_template WHERE entry = "..entry)
+	local q = WorldDBQuery("SELECT class, subclass, stackable, name FROM item_template WHERE entry = "..entry)
 	if q then
 		local info = {
 			class = q:GetUInt32(0),
 			subclass = q:GetUInt32(1),
 			stackable = q:GetInt32(2),
+			name = q:GetString(3),
 		}
 		itemInfoCache[entry] = info
 		return info
@@ -113,7 +114,7 @@ ES.RequestData = function(player, catIndex)
 	AIO.Msg():Add("EndlessStorage", "UpdateItems", catIndex, items):Send(player)
 end
 
-ES.Withdraw = function(player, itemEntry, catIndex)
+ES.Withdraw = function(player, itemEntry, catIndex, searchText)
 	local guid = player:GetGUIDLow()
 
 	local result = CharDBQuery("SELECT amount FROM custom_endless_storage WHERE character_id = "..guid.." AND item_entry = "..itemEntry)
@@ -141,8 +142,12 @@ ES.Withdraw = function(player, itemEntry, catIndex)
 		player:SendBroadcastMessage("|cffff0000Not enough bag space!|r")
 	end
 
-	-- Refresh current category view
-	ES.RequestData(player, catIndex)
+	-- Refresh: search results or category view
+	if searchText and searchText ~= "" then
+		ES.Search(player, searchText)
+	else
+		ES.RequestData(player, catIndex)
+	end
 end
 
 ES.Deposit = function(player, catIndex)
@@ -212,6 +217,33 @@ ES.Deposit = function(player, catIndex)
 
 	player:SendBroadcastMessage("|cff00ff00All materials deposited successfully.|r")
 	ES.RequestData(player, catIndex)
+end
+
+ES.Search = function(player, searchText)
+	if type(searchText) ~= "string" or string.len(searchText) < 2 then return end
+	local guid = player:GetGUIDLow()
+
+	-- Load all stored items for this character
+	local result = CharDBQuery("SELECT item_entry, amount FROM custom_endless_storage WHERE character_id = "..guid)
+	if not result then
+		AIO.Msg():Add("EndlessStorage", "UpdateItems", 0, {}):Send(player)
+		return
+	end
+
+	local search = string.lower(searchText)
+	local items = {}
+	repeat
+		local entry = result:GetUInt32(0)
+		local amount = result:GetUInt32(1)
+		-- Use cached item info (includes name)
+		local info = GetItemTemplateInfo(entry)
+		if info and info.name and string.find(string.lower(info.name), search, 1, true) then
+			table.insert(items, entry)
+			table.insert(items, amount)
+		end
+	until not result:NextRow()
+
+	AIO.Msg():Add("EndlessStorage", "UpdateItems", 0, items):Send(player)
 end
 
 AIO.AddHandlers("EndlessStorage", ES)
