@@ -1,0 +1,17 @@
+#
+# Copyright (C) 2016+ AzerothCore <www.azerothcore.org>, released under GNU AGPL v3 license
+#
+
+[worldserver]
+
+########################################
+# Endless Storage Config
+########################################
+#
+#    EndlessStorage.Enable
+#        Description: Enable the endless storage module
+#        Default:     1 - Enabled
+#                     0 - Disabled
+#
+
+EndlessStorage.Enable = 1
