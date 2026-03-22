@@ -194,7 +194,8 @@ local function UpdateReagentDisplay()
 
 	-- Show/hide storage craft buttons
 	CreateStorageButtons()
-	if needsStorage and GetMaxCraftsWithStorage(selectedSkill) > 0 then
+	local maxCrafts = needsStorage and GetMaxCraftsWithStorage(selectedSkill) or 0
+	if needsStorage and maxCrafts > 0 then
 		-- Position over the original Create/CreateAll buttons
 		if TradeSkillCreateButton then
 			craftStorageBtn:SetParent(TradeSkillFrame)
@@ -204,6 +205,7 @@ local function UpdateReagentDisplay()
 			craftStorageBtn:SetHeight(TradeSkillCreateButton:GetHeight())
 			craftStorageBtn:SetFrameStrata("DIALOG")
 			craftStorageBtn:SetFrameLevel(TradeSkillCreateButton:GetFrameLevel() + 10)
+			craftStorageBtn:SetText("Create (1)")
 			craftStorageBtn:Show()
 			TradeSkillCreateButton:Hide()
 		end
@@ -215,6 +217,7 @@ local function UpdateReagentDisplay()
 			craftAllStorageBtn:SetHeight(TradeSkillCreateAllButton:GetHeight())
 			craftAllStorageBtn:SetFrameStrata("DIALOG")
 			craftAllStorageBtn:SetFrameLevel(TradeSkillCreateAllButton:GetFrameLevel() + 10)
+			craftAllStorageBtn:SetText("Create All (" .. maxCrafts .. ")")
 			craftAllStorageBtn:Show()
 			TradeSkillCreateAllButton:Hide()
 		end
@@ -255,9 +258,14 @@ end
 
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("TRADE_SKILL_SHOW")
+eventFrame:RegisterEvent("BAG_UPDATE")
 eventFrame:SetScript("OnEvent", function(self, event)
-	AIO.Handle("EndlessStorage", "RequestStorageCounts")
-	HookTradeSkillFrame()
+	if event == "TRADE_SKILL_SHOW" then
+		AIO.Handle("EndlessStorage", "RequestStorageCounts")
+		HookTradeSkillFrame()
+	elseif event == "BAG_UPDATE" then
+		UpdateReagentDisplay()
+	end
 end)
 
 ---------------------------------------------------------------------------
@@ -273,8 +281,10 @@ ESC_Client.UpdateStorageCounts = function(player, counts)
 			storageCounts[counts[i]] = counts[i + 1]
 		end
 	end
-	-- Refresh display if tradeskill is open
+	-- Refresh tradeskill display if open
 	UpdateReagentDisplay()
+	-- Refresh storage window if open
+	if ES_RefreshCurrentView then ES_RefreshCurrentView() end
 end
 
 -- Hot-reload safe handler registration

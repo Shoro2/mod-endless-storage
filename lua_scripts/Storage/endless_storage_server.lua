@@ -158,6 +158,8 @@ ES.Withdraw = function(player, itemEntry, catIndex, searchText)
 	else
 		ES.RequestData(player, catIndex)
 	end
+	-- Refresh tradeskill crafting UI if open
+	ES.RequestStorageCounts(player)
 end
 
 ES.Deposit = function(player, catIndex)
@@ -235,6 +237,8 @@ ES.Deposit = function(player, catIndex)
 
 	player:SendBroadcastMessage("|cff00ff00All materials deposited successfully.|r")
 	ES.RequestData(player, catIndex)
+	-- Refresh tradeskill crafting UI if open
+	ES.RequestStorageCounts(player)
 end
 
 ES.Search = function(player, searchText)
