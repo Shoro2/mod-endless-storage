@@ -6,7 +6,7 @@
 local AIO = AIO or require("AIO")
 
 -- Register client addon file to be sent to players
-AIO.AddAddon("endless_storage_client.lua")
+AIO.AddAddon("Storage/endless_storage_client.lua")
 
 -- Constants
 local ITEM_CLASS_GEM = 3
