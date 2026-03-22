@@ -146,6 +146,44 @@ local function CreateStorageButtons()
 end
 
 ---------------------------------------------------------------------------
+-- Update recipe list with combined craft counts
+---------------------------------------------------------------------------
+
+local function UpdateRecipeList()
+	if not TradeSkillFrame or not TradeSkillFrame:IsShown() then return end
+	local numSkills = GetNumTradeSkills()
+	if not numSkills or numSkills == 0 then return end
+
+	local skillOffset = FauxScrollFrame_GetOffset(TradeSkillListScrollFrame) or 0
+	local numVisible = TRADE_SKILLS_DISPLAYED or 8
+
+	for i = 1, numVisible do
+		local index = i + skillOffset
+		if index > numSkills then break end
+
+		local skillName, skillType, numAvailable = GetTradeSkillInfo(index)
+		if skillName and skillType ~= "header" then
+			local maxWithStorage = GetMaxCraftsWithStorage(index)
+			if maxWithStorage > numAvailable then
+				local btn = _G["TradeSkillSkill" .. i]
+				if btn then
+					local text = btn:GetText()
+					if text then
+						-- Remove existing count suffix like " [2]"
+						local baseName = text:gsub(" %[%d+%]$", "")
+						btn:SetText(baseName .. " [" .. maxWithStorage .. "]")
+						-- Gold color to indicate storage contribution
+						if numAvailable == 0 then
+							btn:SetTextColor(1, 0.82, 0)
+						end
+					end
+				end
+			end
+		end
+	end
+end
+
+---------------------------------------------------------------------------
 -- Update reagent display and button visibility
 ---------------------------------------------------------------------------
 
@@ -253,6 +291,11 @@ local function HookTradeSkillFrame()
 		UpdateReagentDisplay()
 	end)
 
+	-- Post-hook list update to show combined craft counts in recipe list
+	hooksecurefunc("TradeSkillFrame_Update", function()
+		UpdateRecipeList()
+	end)
+
 	-- Hide storage buttons and restore originals when tradeskill closes
 	TradeSkillFrame:HookScript("OnHide", function()
 		if craftStorageBtn then craftStorageBtn:Hide() end
@@ -275,6 +318,7 @@ eventFrame:SetScript("OnEvent", function(self, event)
 		HookTradeSkillFrame()
 	elseif event == "BAG_UPDATE" then
 		UpdateReagentDisplay()
+		UpdateRecipeList()
 	end
 end)
 
@@ -293,6 +337,7 @@ ESC_Client.UpdateStorageCounts = function(player, counts)
 	end
 	-- Refresh tradeskill display if open
 	UpdateReagentDisplay()
+	UpdateRecipeList()
 	-- Refresh storage window if open
 	if ES_RefreshCurrentView then ES_RefreshCurrentView() end
 end
