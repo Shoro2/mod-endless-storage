@@ -18,7 +18,10 @@ class CraftingFromStoragePlayerScript : public PlayerScript
 public:
     CraftingFromStoragePlayerScript()
         : PlayerScript("CraftingFromStoragePlayerScript",
-            {PLAYERHOOK_ON_CHECK_REAGENT, PLAYERHOOK_ON_CONSUME_REAGENT}) {}
+            {PLAYERHOOK_ON_CHECK_REAGENT, PLAYERHOOK_ON_CONSUME_REAGENT})
+    {
+        LOG_INFO("module", "mod-endless-storage: CraftingFromStoragePlayerScript loaded");
+    }
 
     // Called when a player does not have enough of a reagent in inventory.
     // Query custom_endless_storage to see if the combined count is sufficient.
@@ -32,6 +35,10 @@ public:
         uint32 deficit = itemCount - inventoryCount;
 
         uint32 storedAmount = GetStoredAmount(guid, itemId);
+
+        LOG_INFO("module", "mod-endless-storage: CheckReagent player={} item={} need={} inventory={} deficit={} stored={}",
+            player->GetName(), itemId, itemCount, inventoryCount, deficit, storedAmount);
+
         if (storedAmount >= deficit)
             hasEnough = true;
     }
@@ -75,7 +82,7 @@ public:
         // Reduce the amount that needs to be destroyed from inventory
         itemCount -= consume;
 
-        LOG_DEBUG("module", "mod-endless-storage: Player {} consumed {} of item {} from storage ({} remain in storage, {} from inventory)",
+        LOG_INFO("module", "mod-endless-storage: Player {} consumed {} of item {} from storage ({} remain in storage, {} from inventory)",
             player->GetName(), consume, itemId, newAmount, itemCount);
     }
 
