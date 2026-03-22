@@ -12,6 +12,7 @@ local scriptDir = scriptPath:match("(.*[/\\])") or ""
 AIO.AddAddon(scriptDir .. "endless_storage_client.lua")
 
 -- Constants
+local ITEM_CLASS_CONSUMABLE = 0
 local ITEM_CLASS_GEM = 3
 local ITEM_CLASS_TRADE_GOODS = 7
 local ITEM_CLASS_RECIPE = 9
@@ -37,6 +38,7 @@ local CATEGORIES = {
 	{name = "Armor Vellum",  class = 7, subclass = 14},
 	{name = "Weapon Vellum", class = 7, subclass = 15},
 	{name = "Recipes",       class = 9, subclass = -1},
+	{name = "Food & Drinks", class = 0, subclass = 5},
 }
 
 -- Item template cache (WorldDBQuery results)
@@ -84,6 +86,9 @@ end
 -- Check if an item is eligible for storage
 local function IsEligible(class, subclass, stackable)
 	if class == ITEM_CLASS_RECIPE then
+		return true
+	end
+	if class == ITEM_CLASS_CONSUMABLE and subclass == 5 and stackable > 1 then
 		return true
 	end
 	if (class == ITEM_CLASS_TRADE_GOODS or class == ITEM_CLASS_GEM) and stackable > 1 then

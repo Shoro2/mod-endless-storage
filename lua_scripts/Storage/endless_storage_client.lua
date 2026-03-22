@@ -22,6 +22,7 @@ local CATEGORIES = {
 	"Armor Vellum",
 	"Weapon Vellum",
 	"Recipes",
+	"Food & Drinks",
 }
 
 -- State
