@@ -18,7 +18,7 @@ Dieses Modul gehört zum Custom-WoW-Server-Projekt (AzerothCore-basiert). Siehe 
 | **UX** | Menü schließt nach jeder Aktion | Frame bleibt offen, Live-Updates |
 | **Technologie** | C++ CreatureScript | Eluna (Lua) + AIO Framework |
 
-## Geplante Repository-Struktur
+## Repository-Struktur
 
 ```
 mod-endless-storage/
@@ -62,10 +62,8 @@ Server (Eluna)                          Client (WoW Addon via AIO)
     |                                        |
     +-- AIO.AddAddon("..._client.lua")      |
     |   → UI-Code an Client senden          |
-    |                                        +-- Frame + Tabs erstellen
-    +-- AIO.AddOnInit(func)                 |
-    |   → Storage-Daten bei Login senden    |
-    |                                        +-- Items in UI anzeigen
+    |                                        +-- Frame + Kategorien erstellen
+    |                                        |
     +-- Handler: "Deposit"  <---------------+-- "Deposit All" geklickt
     |   → Inventar scannen, DB speichern    |
     |   → Aktualisierte Daten senden ------>+-- UI refreshen
@@ -129,89 +127,88 @@ Rezepte werden über `ITEM_CLASS_RECIPE` (Klasse 9) identifiziert. Im Gegensatz 
 | `ITEM_CLASS_GEM` (3) | MaxStackSize > 1 | Jewelcrafting |
 | `ITEM_CLASS_RECIPE` (9) | Alle | Rezepte-Tab |
 
-## AIO-Patterns (Referenz)
+## Server-Handler (endless_storage_server.lua)
 
-### Server-Script (endless_storage_server.lua)
+| Handler | Parameter | Funktion |
+|---------|-----------|----------|
+| `ES.RequestData` | `(player, catIndex)` | DB-Query für Kategorie → sendet `UpdateItems` an Client |
+| `ES.Withdraw` | `(player, itemEntry, catIndex)` | 1 Stack aus DB entnehmen → `AddItem` an Spieler → Refresh |
+| `ES.Deposit` | `(player, catIndex)` | Inventar scannen (Slots 23-38 + Bags 19-22) → DB schreiben → Refresh |
 
-```lua
--- AIO Client-Addon registrieren
-local AIO = AIO or require("AIO")
-AIO.AddAddon()  -- In Client-Datei
+### Item-Template-Cache
 
--- Handler registrieren
-local ES_Handlers = {}
+Server cached `WorldDBQuery` Ergebnisse für item_template (class, subclass, stackable) in `itemInfoCache` Tabelle, um wiederholte DB-Queries zu vermeiden.
 
-ES_Handlers.Deposit = function(player)
-    -- Inventar scannen, Items in DB speichern
-    -- Aktualisierte Daten an Client senden
-end
+### Kategorie-Queries
 
-ES_Handlers.Withdraw = function(player, itemEntry)
-    -- Item aus DB laden, an Spieler geben
-    -- Aktualisierte Daten an Client senden
-end
+| Kategorie | SQL WHERE Bedingung |
+|-----------|-------------------|
+| Standard (z.B. Cloth) | `item_class = 7 AND item_subclass = 5` |
+| Gems & JC | `(item_class = 3) OR (item_class = 7 AND item_subclass = 4)` |
+| Other | `item_class = 7 AND item_subclass IN (0, 11)` |
+| Recipes | `item_class = 9` |
 
-ES_Handlers.RequestData = function(player, category)
-    -- DB-Query für Kategorie
-    -- Daten an Client senden: AIO.Msg():Add("EndlessStorage", "UpdateItems", ...):Send(player)
-end
+## Client-UI (endless_storage_client.lua)
 
-AIO.AddHandlers("EndlessStorage", ES_Handlers)
+### Layout
 
--- Login-Daten senden
-AIO.AddOnInit(function(msg, player)
-    -- Initial-Daten laden und an msg anhängen
-    return msg
-end)
+```
++--------------------------------------------------+
+|  Endless Storage                            [X]  |
++----------+---------------------------------------+
+| Parts    | [icon] Item Name          x100 [Take] |
+| Cloth    | [icon] Item Name           x50 [Take] |
+| Leather  | [icon] Item Name          x200 [Take] |
+| Metal    | [icon] Item Name           x75 [Take] |
+| Herb     |                              ↕        |
+| ...      +---------------------------------------+
+| Recipes  |                                       |
++----------+---------------------------------------+
+|            [ Deposit All Materials ]             |
++--------------------------------------------------+
 ```
 
-### Client-Script (endless_storage_client.lua)
+### UI-Komponenten
 
-```lua
-if AIO.AddAddon() then return end
+| Frame | Typ | Funktion |
+|-------|-----|----------|
+| `EndlessStorageFrame` | Frame | Hauptfenster (560x440, draggable, ESC-close) |
+| `catFrame` | Frame | Linkes Panel mit Kategorie-Buttons |
+| `EndlessStorageScrollFrame` | FauxScrollFrame | Scrollbare Item-Liste (11 Zeilen sichtbar) |
+| `itemRows[1..11]` | Button | Einzelne Item-Zeilen (Icon, Name, Menge, Take-Button) |
+| `depositBtn` | Button | "Deposit All Materials" am unteren Rand |
 
-local ES_Handlers = {}
+### Client-Handler
 
--- Haupt-Frame erstellen
-local mainFrame = CreateFrame("Frame", "EndlessStorageFrame", UIParent)
--- Tabs erstellen (Material-Kategorien + Rezepte)
--- ScrollFrame für Item-Liste
+| Handler | Parameter | Funktion |
+|---------|-----------|----------|
+| `ES_Client.UpdateItems` | `(player, catIndex, items)` | Aktualisiert Item-Liste und Kategorie-Highlight |
 
-ES_Handlers.UpdateItems = function(player, ...)
-    -- Items im ScrollFrame aktualisieren
-end
+### Slash-Commands
 
-if not AIO_BLOCKHANDLES["EndlessStorage"] then
-    AIO.AddHandlers("EndlessStorage", ES_Handlers)
-else
-    -- Hot-Reload: Funktionen in bestehender Tabelle aktualisieren
-    for k, v in pairs(ES_Handlers) do
-        AIO_BLOCKHANDLES["EndlessStorage"][k] = v
-    end
-end
-```
+- `/es` oder `/storage` — Toggle Endless Storage Frame
 
 ### Wichtige AIO-Regeln
 
 - `player` ist IMMER erstes Argument in Handlern (Server: Eluna Player-Objekt, Client: Spielername-String)
 - Max 15 Argumente pro `msg:Add()` Aufruf
-- Hot-Reload-Guard gegen `AIO.AddHandlers` Assert (siehe share-public CLAUDE.md)
+- Hot-Reload-Guard: `ES_ClientInit` Flag verhindert doppelte `AIO.AddHandlers` Registrierung
 - Tab-Einrückung (Eluna/AIO Konvention)
 - `AIO.AddAddon()` am Anfang der Client-Datei mit Early-Return
+- Item-Info-Retry: Timer prüft alle 0.5s ob `GetItemInfo()` für sichtbare Items gecacht ist
 
 ## Code-Konventionen
 
 - Lua (Eluna auf Server, WoW Lua API auf Client)
 - Tab-Einrückung
-- Async-Pattern für DB-Queries (Eluna `CharDBQuery` mit Callbacks)
-- AIO Handler-Namen: `"EndlessStorage"` als Namespace
-- UI-Frame-Namen: `"EndlessStorageFrame"`, `"EndlessStorageTab1"`, etc.
-- Für große Datenmengen: Daten pro Kategorie/Tab laden (nicht alles auf einmal)
+- Synchrone DB-Queries (`CharDBQuery`, `CharDBExecute`) — ok für einzelne Spieler-Aktionen
+- AIO Handler-Namespace: `"EndlessStorage"`
+- Daten pro Kategorie laden (nicht alles auf einmal), Format: `{entry1, amount1, entry2, amount2, ...}`
 
 ## Build & Deployment
 
 1. `lua_scripts/` Dateien in das Eluna `lua_scripts/` Verzeichnis kopieren
-2. SQL aus `data/sql/` einspielen (Characters-DB)
+2. SQL aus `data/sql/` einspielen (Characters-DB): `custom_endless_storage` Tabelle
 3. AIO Framework muss installiert sein (siehe share-public/AIO_Server/)
 4. AIO_Client Addon muss beim WoW-Client installiert sein
 5. Server neustarten oder `.reload eluna` für Script-Änderungen
