@@ -10,6 +10,7 @@ local AIO = AIO or require("AIO")
 local scriptPath = debug.getinfo(1, 'S').source:sub(2)
 local scriptDir = scriptPath:match("(.*[/\\])") or ""
 AIO.AddAddon(scriptDir .. "endless_storage_client.lua")
+AIO.AddAddon(scriptDir .. "endless_storage_crafting_client.lua")
 
 -- Constants
 local ITEM_CLASS_CONSUMABLE = 0
@@ -261,6 +262,102 @@ ES.Search = function(player, searchText)
 	until not result:NextRow()
 
 	AIO.Msg():Add("EndlessStorage", "UpdateItems", 0, items):Send(player)
+end
+
+---------------------------------------------------------------------------
+-- Crafting from Storage
+---------------------------------------------------------------------------
+
+-- Send all storage item counts to client (for tradeskill UI overlay)
+ES.RequestStorageCounts = function(player)
+	local guid = player:GetGUIDLow()
+	local result = CharDBQuery("SELECT item_entry, amount FROM custom_endless_storage WHERE character_id = "..guid)
+	local counts = {}
+	if result then
+		repeat
+			table.insert(counts, result:GetUInt32(0))
+			table.insert(counts, result:GetUInt32(1))
+		until not result:NextRow()
+	end
+	AIO.Msg():Add("EndlessStorageCrafting", "UpdateStorageCounts", counts):Send(player)
+end
+
+-- Handle craft request from client
+-- reagents = {entry1, countPerCraft1, entry2, countPerCraft2, ...}
+ES.CraftFromStorage = function(player, spellId, numRepeats, reagents)
+	if not player:HasSpell(spellId) then
+		player:SendBroadcastMessage("|cffff0000You don't know this recipe!|r")
+		return
+	end
+
+	if type(numRepeats) ~= "number" or numRepeats < 1 then numRepeats = 1 end
+	if numRepeats > 20 then numRepeats = 20 end
+	if type(reagents) ~= "table" or #reagents < 2 or #reagents % 2 ~= 0 then return end
+
+	local guid = player:GetGUIDLow()
+
+	-- Pre-read storage amounts for all reagents
+	local storage = {}
+	for i = 1, #reagents, 2 do
+		local entry = reagents[i]
+		local r = CharDBQuery("SELECT amount FROM custom_endless_storage WHERE character_id = "..guid.." AND item_entry = "..entry)
+		storage[entry] = r and r:GetUInt32(0) or 0
+	end
+
+	-- Calculate max possible crafts
+	local maxPossible = numRepeats
+	for i = 1, #reagents, 2 do
+		local entry = reagents[i]
+		local perCraft = reagents[i + 1]
+		local total = player:GetItemCount(entry) + (storage[entry] or 0)
+		local possible = math.floor(total / perCraft)
+		maxPossible = math.min(maxPossible, possible)
+	end
+
+	if maxPossible <= 0 then
+		player:SendBroadcastMessage("|cffff0000Not enough materials!|r")
+		ES.RequestStorageCounts(player)
+		return
+	end
+
+	-- Consume reagents for all crafts
+	local logMsg = AIO.Msg()
+	for i = 1, #reagents, 2 do
+		local entry = reagents[i]
+		local totalNeeded = reagents[i + 1] * maxPossible
+
+		-- First consume from inventory
+		local inventoryCount = player:GetItemCount(entry)
+		local fromInventory = math.min(inventoryCount, totalNeeded)
+		if fromInventory > 0 then
+			player:RemoveItem(entry, fromInventory)
+		end
+
+		-- Then from storage
+		local fromStorage = totalNeeded - fromInventory
+		if fromStorage > 0 then
+			local remaining = (storage[entry] or 0) - fromStorage
+			if remaining <= 0 then
+				CharDBExecute("DELETE FROM custom_endless_storage WHERE character_id = "..guid.." AND item_entry = "..entry)
+			else
+				CharDBExecute("UPDATE custom_endless_storage SET amount = "..remaining.." WHERE character_id = "..guid.." AND item_entry = "..entry)
+			end
+
+			local templateInfo = GetItemTemplateInfo(entry)
+			local itemName = (templateInfo and templateInfo.name) or ("Item #"..entry)
+			logMsg:Add("EndlessStorage", "LogEntry",
+				"|cffff6600-|r " .. itemName .. " x" .. fromStorage .. " (crafting)")
+		end
+	end
+	logMsg:Send(player)
+
+	-- Cast the spell (triggered=true: bypasses reagent check since we consumed manually)
+	for i = 1, maxPossible do
+		player:CastSpell(player, spellId, true)
+	end
+
+	player:SendBroadcastMessage("|cff00ff00Crafted " .. maxPossible .. "x successfully.|r")
+	ES.RequestStorageCounts(player)
 end
 
 AIO.AddHandlers("EndlessStorage", ES)
