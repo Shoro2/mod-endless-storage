@@ -6,7 +6,10 @@
 local AIO = AIO or require("AIO")
 
 -- Register client addon file to be sent to players
-AIO.AddAddon("Storage/endless_storage_client.lua")
+-- Resolve path relative to this script's location
+local scriptPath = debug.getinfo(1, 'S').source:sub(2)
+local scriptDir = scriptPath:match("(.*[/\\])") or ""
+AIO.AddAddon(scriptDir .. "endless_storage_client.lua")
 
 -- Constants
 local ITEM_CLASS_GEM = 3
