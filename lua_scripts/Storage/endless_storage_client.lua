@@ -22,11 +22,17 @@ local CATEGORIES = {
 	"Armor Vellum",
 	"Weapon Vellum",
 	"Recipes",
+	"Food & Drinks",
 }
 
 -- State
 local currentCategory = 1
 local currentItems = {} -- flat: {entry1, amt1, entry2, amt2, ...}
+local searchActive = false
+local sessionLog = {} -- text entries for current session
+
+-- Forward declarations
+local logBtn, depositBtn
 
 -- Layout constants
 local FRAME_WIDTH = 560
@@ -95,8 +101,14 @@ catFrame:SetWidth(CAT_WIDTH)
 
 local categoryButtons = {}
 
+local HideLog -- forward declaration
+
 local function SelectCategory(index)
 	currentCategory = index
+	searchActive = false
+	if HideLog then HideLog() end
+	searchBox:SetText("")
+	searchBox:ClearFocus()
 	for i, btn in ipairs(categoryButtons) do
 		if i == index then
 			btn:SetBackdropColor(0.2, 0.3, 0.6, 1)
@@ -149,10 +161,59 @@ for i, catName in ipairs(CATEGORIES) do
 end
 
 ---------------------------------------------------------------------------
+-- Search Box (above item list)
+---------------------------------------------------------------------------
+local searchBox = CreateFrame("EditBox", "EndlessStorageSearchBox", mainFrame, "InputBoxTemplate")
+searchBox:SetWidth(260)
+searchBox:SetHeight(20)
+searchBox:SetPoint("TOPLEFT", catFrame, "TOPRIGHT", 14, 2)
+searchBox:SetAutoFocus(false)
+searchBox:SetMaxLetters(40)
+
+local searchLabel = searchBox:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+searchLabel:SetPoint("LEFT", 6, 0)
+searchLabel:SetText("Search...")
+searchLabel:SetTextColor(0.5, 0.5, 0.5)
+
+searchBox:SetScript("OnTextChanged", function(self)
+	local text = self:GetText()
+	if text == "" then
+		searchLabel:Show()
+		if searchActive then
+			searchActive = false
+			-- Restore category highlight and reload
+			SelectCategory(currentCategory)
+		end
+	else
+		searchLabel:Hide()
+		if string.len(text) >= 2 then
+			searchActive = true
+			-- Deselect all category buttons
+			for i, btn in ipairs(categoryButtons) do
+				btn:SetBackdropColor(0.1, 0.1, 0.1, 0.6)
+				btn.text:SetTextColor(0.8, 0.8, 0.8)
+			end
+			AIO.Handle("EndlessStorage", "Search", text)
+		end
+	end
+end)
+
+searchBox:SetScript("OnEscapePressed", function(self)
+	self:SetText("")
+	self:ClearFocus()
+end)
+
+searchBox:SetScript("OnEditFocusGained", function(self)
+	if self:GetText() == "" then
+		searchLabel:Show()
+	end
+end)
+
+---------------------------------------------------------------------------
 -- Item List Panel (Right Side)
 ---------------------------------------------------------------------------
 local listFrame = CreateFrame("Frame", nil, mainFrame)
-listFrame:SetPoint("TOPLEFT", catFrame, "TOPRIGHT", 8, 0)
+listFrame:SetPoint("TOPLEFT", catFrame, "TOPRIGHT", 8, -24)
 listFrame:SetPoint("BOTTOMRIGHT", mainFrame, "BOTTOMRIGHT", -16, CONTENT_BOTTOM)
 
 -- Background for item list
@@ -221,7 +282,8 @@ local function CreateItemRow(index)
 	withdrawBtn:SetText("Take")
 	withdrawBtn:SetScript("OnClick", function()
 		if row.itemEntry then
-			AIO.Handle("EndlessStorage", "Withdraw", row.itemEntry, currentCategory)
+			local search = searchActive and searchBox:GetText() or nil
+			AIO.Handle("EndlessStorage", "Withdraw", row.itemEntry, currentCategory, search)
 		end
 	end)
 	row.withdrawBtn = withdrawBtn
@@ -295,9 +357,139 @@ scrollFrame:SetScript("OnVerticalScroll", function(self, offset)
 end)
 
 ---------------------------------------------------------------------------
+-- Session Log Panel (overlays item list when active)
+---------------------------------------------------------------------------
+local logShown = false
+
+local logFrame = CreateFrame("Frame", nil, mainFrame)
+logFrame:SetPoint("TOPLEFT", catFrame, "TOPRIGHT", 8, 0)
+logFrame:SetPoint("BOTTOMRIGHT", mainFrame, "BOTTOMRIGHT", -16, CONTENT_BOTTOM)
+logFrame:SetBackdrop({
+	bgFile = "Interface/Buttons/WHITE8x8",
+	edgeFile = "Interface/Buttons/WHITE8x8",
+	edgeSize = 1,
+	insets = {left = 1, right = 1, top = 1, bottom = 1}
+})
+logFrame:SetBackdropColor(0.05, 0.05, 0.05, 0.7)
+logFrame:SetBackdropBorderColor(0.3, 0.3, 0.3, 0.8)
+logFrame:Hide()
+
+local logScrollFrame = CreateFrame("ScrollFrame", "EndlessStorageLogScroll", logFrame, "UIPanelScrollFrameTemplate")
+logScrollFrame:SetPoint("TOPLEFT", 6, -6)
+logScrollFrame:SetPoint("BOTTOMRIGHT", -28, 6)
+
+local logContent = CreateFrame("Frame", nil, logScrollFrame)
+logContent:SetWidth(1)
+logContent:SetHeight(1)
+logScrollFrame:SetScrollChild(logContent)
+
+local logText = logContent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+logText:SetPoint("TOPLEFT", 0, 0)
+logText:SetWidth(370)
+logText:SetJustifyH("LEFT")
+logText:SetJustifyV("TOP")
+logText:SetTextColor(0.8, 0.8, 0.8)
+logText:SetText("")
+
+local logEmptyText = logFrame:CreateFontString(nil, "OVERLAY", "GameFontDisable")
+logEmptyText:SetPoint("CENTER", 0, 0)
+logEmptyText:SetText("No activity this session")
+
+local function RefreshLog()
+	if #sessionLog == 0 then
+		logEmptyText:Show()
+		logText:SetText("")
+		logContent:SetHeight(1)
+		return
+	end
+	logEmptyText:Hide()
+	-- Build log text (newest first)
+	local lines = {}
+	for i = #sessionLog, 1, -1 do
+		table.insert(lines, sessionLog[i])
+	end
+	local str = table.concat(lines, "\n")
+	logText:SetText(str)
+	-- Update scroll child height
+	logContent:SetHeight(logText:GetStringHeight() + 10)
+end
+
+local function ShowLog()
+	logShown = true
+	listFrame:Hide()
+	searchBox:Hide()
+	logFrame:Show()
+	depositBtn:Hide()
+	-- Deselect all category buttons, highlight log
+	for i, btn in ipairs(categoryButtons) do
+		btn:SetBackdropColor(0.1, 0.1, 0.1, 0.6)
+		btn.text:SetTextColor(0.8, 0.8, 0.8)
+	end
+	logBtn:SetBackdropColor(0.2, 0.3, 0.6, 1)
+	logBtn.text:SetTextColor(1, 1, 1)
+	RefreshLog()
+end
+
+HideLog = function()
+	logShown = false
+	logFrame:Hide()
+	listFrame:Show()
+	searchBox:Show()
+	depositBtn:Show()
+	logBtn:SetBackdropColor(0.1, 0.1, 0.1, 0.6)
+	logBtn.text:SetTextColor(0.8, 0.8, 0.8)
+end
+
+-- Log category button (at bottom of category panel)
+logBtn = CreateFrame("Button", nil, catFrame)
+logBtn:SetWidth(CAT_WIDTH)
+logBtn:SetHeight(CAT_BTN_HEIGHT)
+logBtn:SetPoint("BOTTOMLEFT", catFrame, "BOTTOMLEFT", 0, 0)
+logBtn:SetBackdrop({
+	bgFile = "Interface/Buttons/WHITE8x8",
+	edgeFile = "Interface/Buttons/WHITE8x8",
+	edgeSize = 1,
+	insets = {left = 1, right = 1, top = 1, bottom = 1}
+})
+logBtn:SetBackdropColor(0.1, 0.1, 0.1, 0.6)
+logBtn:SetBackdropBorderColor(0.3, 0.3, 0.3, 0.8)
+
+logBtn.text = logBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+logBtn.text:SetPoint("LEFT", 6, 0)
+logBtn.text:SetText("|cffaaaaaaSession Log|r")
+logBtn.text:SetTextColor(0.8, 0.8, 0.8)
+
+logBtn:SetScript("OnClick", function()
+	if logShown then
+		HideLog()
+		SelectCategory(currentCategory)
+	else
+		ShowLog()
+	end
+end)
+logBtn:SetScript("OnEnter", function(self)
+	if not logShown then
+		self:SetBackdropColor(0.15, 0.2, 0.4, 0.8)
+	end
+end)
+logBtn:SetScript("OnLeave", function(self)
+	if not logShown then
+		self:SetBackdropColor(0.1, 0.1, 0.1, 0.6)
+	end
+end)
+
+local function AddLogEntry(text)
+	local t = date("%H:%M:%S")
+	table.insert(sessionLog, "|cff888888" .. t .. "|r " .. text)
+	if logShown then
+		RefreshLog()
+	end
+end
+
+---------------------------------------------------------------------------
 -- Deposit Button
 ---------------------------------------------------------------------------
-local depositBtn = CreateFrame("Button", nil, mainFrame, "UIPanelButtonTemplate")
+depositBtn = CreateFrame("Button", nil, mainFrame, "UIPanelButtonTemplate")
 depositBtn:SetWidth(200)
 depositBtn:SetHeight(28)
 depositBtn:SetPoint("BOTTOM", 0, 14)
@@ -351,17 +543,23 @@ end)
 ---------------------------------------------------------------------------
 local ES_Client = {}
 
+ES_Client.LogEntry = function(player, text)
+	AddLogEntry(text)
+end
+
 ES_Client.UpdateItems = function(player, catIndex, items)
-	currentCategory = catIndex
 	currentItems = items or {}
-	-- Update category button highlight
-	for i, btn in ipairs(categoryButtons) do
-		if i == catIndex then
-			btn:SetBackdropColor(0.2, 0.3, 0.6, 1)
-			btn.text:SetTextColor(1, 1, 1)
-		else
-			btn:SetBackdropColor(0.1, 0.1, 0.1, 0.6)
-			btn.text:SetTextColor(0.8, 0.8, 0.8)
+	if not searchActive then
+		currentCategory = catIndex
+		-- Update category button highlight
+		for i, btn in ipairs(categoryButtons) do
+			if i == catIndex then
+				btn:SetBackdropColor(0.2, 0.3, 0.6, 1)
+				btn.text:SetTextColor(1, 1, 1)
+			else
+				btn:SetBackdropColor(0.1, 0.1, 0.1, 0.6)
+				btn.text:SetTextColor(0.8, 0.8, 0.8)
+			end
 		end
 	end
 	RefreshItemList()
