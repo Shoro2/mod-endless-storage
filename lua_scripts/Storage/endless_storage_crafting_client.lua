@@ -197,24 +197,33 @@ local function UpdateReagentDisplay()
 	if needsStorage and GetMaxCraftsWithStorage(selectedSkill) > 0 then
 		-- Position over the original Create/CreateAll buttons
 		if TradeSkillCreateButton then
+			craftStorageBtn:SetParent(TradeSkillFrame)
 			craftStorageBtn:ClearAllPoints()
 			craftStorageBtn:SetPoint("CENTER", TradeSkillCreateButton, "CENTER", 0, 0)
 			craftStorageBtn:SetWidth(TradeSkillCreateButton:GetWidth())
 			craftStorageBtn:SetHeight(TradeSkillCreateButton:GetHeight())
-			craftStorageBtn:SetParent(TradeSkillFrame)
+			craftStorageBtn:SetFrameStrata("DIALOG")
+			craftStorageBtn:SetFrameLevel(TradeSkillCreateButton:GetFrameLevel() + 10)
 			craftStorageBtn:Show()
+			TradeSkillCreateButton:Hide()
 		end
 		if TradeSkillCreateAllButton then
+			craftAllStorageBtn:SetParent(TradeSkillFrame)
 			craftAllStorageBtn:ClearAllPoints()
 			craftAllStorageBtn:SetPoint("CENTER", TradeSkillCreateAllButton, "CENTER", 0, 0)
 			craftAllStorageBtn:SetWidth(TradeSkillCreateAllButton:GetWidth())
 			craftAllStorageBtn:SetHeight(TradeSkillCreateAllButton:GetHeight())
-			craftAllStorageBtn:SetParent(TradeSkillFrame)
+			craftAllStorageBtn:SetFrameStrata("DIALOG")
+			craftAllStorageBtn:SetFrameLevel(TradeSkillCreateAllButton:GetFrameLevel() + 10)
 			craftAllStorageBtn:Show()
+			TradeSkillCreateAllButton:Hide()
 		end
 	else
 		craftStorageBtn:Hide()
 		craftAllStorageBtn:Hide()
+		-- Restore original buttons
+		if TradeSkillCreateButton then TradeSkillCreateButton:Show() end
+		if TradeSkillCreateAllButton then TradeSkillCreateAllButton:Show() end
 	end
 end
 
@@ -231,10 +240,12 @@ local function HookTradeSkillFrame()
 		UpdateReagentDisplay()
 	end)
 
-	-- Hide storage buttons when tradeskill closes
+	-- Hide storage buttons and restore originals when tradeskill closes
 	TradeSkillFrame:HookScript("OnHide", function()
 		if craftStorageBtn then craftStorageBtn:Hide() end
 		if craftAllStorageBtn then craftAllStorageBtn:Hide() end
+		if TradeSkillCreateButton then TradeSkillCreateButton:Show() end
+		if TradeSkillCreateAllButton then TradeSkillCreateAllButton:Show() end
 	end)
 end
 
