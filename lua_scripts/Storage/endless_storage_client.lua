@@ -29,6 +29,10 @@ local CATEGORIES = {
 local currentCategory = 1
 local currentItems = {} -- flat: {entry1, amt1, entry2, amt2, ...}
 local searchActive = false
+local sessionLog = {} -- text entries for current session
+
+-- Forward declarations
+local logBtn, depositBtn
 
 -- Layout constants
 local FRAME_WIDTH = 560
@@ -97,9 +101,12 @@ catFrame:SetWidth(CAT_WIDTH)
 
 local categoryButtons = {}
 
+local HideLog -- forward declaration
+
 local function SelectCategory(index)
 	currentCategory = index
 	searchActive = false
+	if HideLog then HideLog() end
 	searchBox:SetText("")
 	searchBox:ClearFocus()
 	for i, btn in ipairs(categoryButtons) do
@@ -350,9 +357,139 @@ scrollFrame:SetScript("OnVerticalScroll", function(self, offset)
 end)
 
 ---------------------------------------------------------------------------
+-- Session Log Panel (overlays item list when active)
+---------------------------------------------------------------------------
+local logShown = false
+
+local logFrame = CreateFrame("Frame", nil, mainFrame)
+logFrame:SetPoint("TOPLEFT", catFrame, "TOPRIGHT", 8, 0)
+logFrame:SetPoint("BOTTOMRIGHT", mainFrame, "BOTTOMRIGHT", -16, CONTENT_BOTTOM)
+logFrame:SetBackdrop({
+	bgFile = "Interface/Buttons/WHITE8x8",
+	edgeFile = "Interface/Buttons/WHITE8x8",
+	edgeSize = 1,
+	insets = {left = 1, right = 1, top = 1, bottom = 1}
+})
+logFrame:SetBackdropColor(0.05, 0.05, 0.05, 0.7)
+logFrame:SetBackdropBorderColor(0.3, 0.3, 0.3, 0.8)
+logFrame:Hide()
+
+local logScrollFrame = CreateFrame("ScrollFrame", "EndlessStorageLogScroll", logFrame, "UIPanelScrollFrameTemplate")
+logScrollFrame:SetPoint("TOPLEFT", 6, -6)
+logScrollFrame:SetPoint("BOTTOMRIGHT", -28, 6)
+
+local logContent = CreateFrame("Frame", nil, logScrollFrame)
+logContent:SetWidth(1)
+logContent:SetHeight(1)
+logScrollFrame:SetScrollChild(logContent)
+
+local logText = logContent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+logText:SetPoint("TOPLEFT", 0, 0)
+logText:SetWidth(370)
+logText:SetJustifyH("LEFT")
+logText:SetJustifyV("TOP")
+logText:SetTextColor(0.8, 0.8, 0.8)
+logText:SetText("")
+
+local logEmptyText = logFrame:CreateFontString(nil, "OVERLAY", "GameFontDisable")
+logEmptyText:SetPoint("CENTER", 0, 0)
+logEmptyText:SetText("No activity this session")
+
+local function RefreshLog()
+	if #sessionLog == 0 then
+		logEmptyText:Show()
+		logText:SetText("")
+		logContent:SetHeight(1)
+		return
+	end
+	logEmptyText:Hide()
+	-- Build log text (newest first)
+	local lines = {}
+	for i = #sessionLog, 1, -1 do
+		table.insert(lines, sessionLog[i])
+	end
+	local str = table.concat(lines, "\n")
+	logText:SetText(str)
+	-- Update scroll child height
+	logContent:SetHeight(logText:GetStringHeight() + 10)
+end
+
+local function ShowLog()
+	logShown = true
+	listFrame:Hide()
+	searchBox:Hide()
+	logFrame:Show()
+	depositBtn:Hide()
+	-- Deselect all category buttons, highlight log
+	for i, btn in ipairs(categoryButtons) do
+		btn:SetBackdropColor(0.1, 0.1, 0.1, 0.6)
+		btn.text:SetTextColor(0.8, 0.8, 0.8)
+	end
+	logBtn:SetBackdropColor(0.2, 0.3, 0.6, 1)
+	logBtn.text:SetTextColor(1, 1, 1)
+	RefreshLog()
+end
+
+HideLog = function()
+	logShown = false
+	logFrame:Hide()
+	listFrame:Show()
+	searchBox:Show()
+	depositBtn:Show()
+	logBtn:SetBackdropColor(0.1, 0.1, 0.1, 0.6)
+	logBtn.text:SetTextColor(0.8, 0.8, 0.8)
+end
+
+-- Log category button (at bottom of category panel)
+logBtn = CreateFrame("Button", nil, catFrame)
+logBtn:SetWidth(CAT_WIDTH)
+logBtn:SetHeight(CAT_BTN_HEIGHT)
+logBtn:SetPoint("BOTTOMLEFT", catFrame, "BOTTOMLEFT", 0, 0)
+logBtn:SetBackdrop({
+	bgFile = "Interface/Buttons/WHITE8x8",
+	edgeFile = "Interface/Buttons/WHITE8x8",
+	edgeSize = 1,
+	insets = {left = 1, right = 1, top = 1, bottom = 1}
+})
+logBtn:SetBackdropColor(0.1, 0.1, 0.1, 0.6)
+logBtn:SetBackdropBorderColor(0.3, 0.3, 0.3, 0.8)
+
+logBtn.text = logBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+logBtn.text:SetPoint("LEFT", 6, 0)
+logBtn.text:SetText("|cffaaaaaaSession Log|r")
+logBtn.text:SetTextColor(0.8, 0.8, 0.8)
+
+logBtn:SetScript("OnClick", function()
+	if logShown then
+		HideLog()
+		SelectCategory(currentCategory)
+	else
+		ShowLog()
+	end
+end)
+logBtn:SetScript("OnEnter", function(self)
+	if not logShown then
+		self:SetBackdropColor(0.15, 0.2, 0.4, 0.8)
+	end
+end)
+logBtn:SetScript("OnLeave", function(self)
+	if not logShown then
+		self:SetBackdropColor(0.1, 0.1, 0.1, 0.6)
+	end
+end)
+
+local function AddLogEntry(text)
+	local t = date("%H:%M:%S")
+	table.insert(sessionLog, "|cff888888" .. t .. "|r " .. text)
+	if logShown then
+		RefreshLog()
+	end
+end
+
+---------------------------------------------------------------------------
 -- Deposit Button
 ---------------------------------------------------------------------------
-local depositBtn = CreateFrame("Button", nil, mainFrame, "UIPanelButtonTemplate")
+depositBtn = CreateFrame("Button", nil, mainFrame, "UIPanelButtonTemplate")
 depositBtn:SetWidth(200)
 depositBtn:SetHeight(28)
 depositBtn:SetPoint("BOTTOM", 0, 14)
@@ -405,6 +542,10 @@ end)
 -- AIO Handlers (Client-side)
 ---------------------------------------------------------------------------
 local ES_Client = {}
+
+ES_Client.LogEntry = function(player, text)
+	AddLogEntry(text)
+end
 
 ES_Client.UpdateItems = function(player, catIndex, items)
 	currentItems = items or {}

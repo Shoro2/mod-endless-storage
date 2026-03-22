@@ -143,6 +143,10 @@ ES.Withdraw = function(player, itemEntry, catIndex, searchText)
 		else
 			CharDBExecute("UPDATE custom_endless_storage SET amount = "..remaining.." WHERE character_id = "..guid.." AND item_entry = "..itemEntry)
 		end
+		-- Log entry
+		local itemName = templateInfo.name or ("Item #"..itemEntry)
+		AIO.Msg():Add("EndlessStorage", "LogEntry",
+			"|cffff6600-|r " .. itemName .. " x" .. withdrawAmount):Send(player)
 	else
 		player:SendBroadcastMessage("|cffff0000Not enough bag space!|r")
 	end
@@ -206,6 +210,7 @@ ES.Deposit = function(player, catIndex)
 	end
 
 	-- Load existing amounts and merge
+	local logMsg = AIO.Msg()
 	for entry, info in pairs(deposited) do
 		local existing = CharDBQuery("SELECT amount FROM custom_endless_storage WHERE character_id = "..guid.." AND item_entry = "..entry)
 		local totalAmount = info.amount
@@ -218,7 +223,14 @@ ES.Deposit = function(player, catIndex)
 
 		-- Remove items from player
 		player:RemoveItem(entry, info.amount)
+
+		-- Log entry per item
+		local templateInfo = GetItemTemplateInfo(entry)
+		local itemName = (templateInfo and templateInfo.name) or ("Item #"..entry)
+		logMsg:Add("EndlessStorage", "LogEntry",
+			"|cff00cc00+|r " .. itemName .. " x" .. info.amount)
 	end
+	logMsg:Send(player)
 
 	player:SendBroadcastMessage("|cff00ff00All materials deposited successfully.|r")
 	ES.RequestData(player, catIndex)
