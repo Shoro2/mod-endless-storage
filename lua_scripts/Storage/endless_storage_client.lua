@@ -441,10 +441,10 @@ HideLog = function()
 end
 
 -- Log category button (at bottom of category panel)
-logBtn = CreateFrame("Button", nil, catFrame)
-logBtn:SetWidth(CAT_WIDTH)
-logBtn:SetHeight(CAT_BTN_HEIGHT)
-logBtn:SetPoint("BOTTOMLEFT", catFrame, "BOTTOMLEFT", 0, 0)
+logBtn = CreateFrame("Button", nil, mainFrame)
+logBtn:SetWidth(80)
+logBtn:SetHeight(20)
+logBtn:SetPoint("RIGHT", closeBtn, "LEFT", -2, 0)
 logBtn:SetBackdrop({
 	bgFile = "Interface/Buttons/WHITE8x8",
 	edgeFile = "Interface/Buttons/WHITE8x8",
@@ -455,8 +455,8 @@ logBtn:SetBackdropColor(0.1, 0.1, 0.1, 0.6)
 logBtn:SetBackdropBorderColor(0.3, 0.3, 0.3, 0.8)
 
 logBtn.text = logBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-logBtn.text:SetPoint("LEFT", 6, 0)
-logBtn.text:SetText("|cffaaaaaaSession Log|r")
+logBtn.text:SetPoint("CENTER", 0, 0)
+logBtn.text:SetText("|cffaaaaaaLog|r")
 logBtn.text:SetTextColor(0.8, 0.8, 0.8)
 
 logBtn:SetScript("OnClick", function()
