@@ -194,8 +194,18 @@ local function UpdateReagentDisplay()
 
 	-- Show/hide storage craft buttons
 	CreateStorageButtons()
-	local maxCrafts = needsStorage and GetMaxCraftsWithStorage(selectedSkill) or 0
-	if needsStorage and maxCrafts > 0 then
+	local maxCrafts = GetMaxCraftsWithStorage(selectedSkill)
+	-- Check if any reagent for this recipe exists in storage
+	local hasStorageReagents = false
+	for i = 1, numReagents do
+		local link = GetTradeSkillReagentItemLink(selectedSkill, i)
+		local itemId = LinkToId(link)
+		if itemId and (storageCounts[itemId] or 0) > 0 then
+			hasStorageReagents = true
+			break
+		end
+	end
+	if hasStorageReagents and maxCrafts > 0 then
 		-- Position over the original Create/CreateAll buttons
 		if TradeSkillCreateButton then
 			craftStorageBtn:SetParent(TradeSkillFrame)
