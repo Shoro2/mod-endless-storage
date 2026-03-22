@@ -123,6 +123,13 @@ local function SelectCategory(index)
 	AIO.Handle("EndlessStorage", "RequestData", index)
 end
 
+-- Global refresh function for cross-addon communication (used by crafting client)
+function ES_RefreshCurrentView()
+	if EndlessStorageFrame and EndlessStorageFrame:IsShown() then
+		AIO.Handle("EndlessStorage", "RequestData", currentCategory)
+	end
+end
+
 for i, catName in ipairs(CATEGORIES) do
 	local btn = CreateFrame("Button", nil, catFrame)
 	btn:SetWidth(CAT_WIDTH)
