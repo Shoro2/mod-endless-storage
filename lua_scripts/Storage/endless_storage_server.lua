@@ -341,6 +341,7 @@ ES.CraftFromStorage = function(player, spellId, numRepeats, reagents)
 		local fromStorage = totalNeeded - fromInventory
 		if fromStorage > 0 then
 			local remaining = (storage[entry] or 0) - fromStorage
+			storage[entry] = math.max(remaining, 0)
 			if remaining <= 0 then
 				CharDBExecute("DELETE FROM custom_endless_storage WHERE character_id = "..guid.." AND item_entry = "..entry)
 			else
@@ -361,7 +362,26 @@ ES.CraftFromStorage = function(player, spellId, numRepeats, reagents)
 	end
 
 	player:SendBroadcastMessage("|cff00ff00Crafted " .. maxPossible .. "x successfully.|r")
-	ES.RequestStorageCounts(player)
+
+	-- Send updated counts directly from memory (CharDBExecute is async,
+	-- so reading back from DB would return stale data)
+	local result = CharDBQuery("SELECT item_entry, amount FROM custom_endless_storage WHERE character_id = "..guid)
+	local counts = {}
+	if result then
+		repeat
+			local e = result:GetUInt32(0)
+			local a = result:GetUInt32(1)
+			-- Override with in-memory value for reagents we just consumed
+			if storage[e] ~= nil then
+				a = storage[e]
+			end
+			if a > 0 then
+				table.insert(counts, e)
+				table.insert(counts, a)
+			end
+		until not result:NextRow()
+	end
+	AIO.Msg():Add("EndlessStorageCrafting", "UpdateStorageCounts", counts):Send(player)
 end
 
 AIO.AddHandlers("EndlessStorage", ES)
