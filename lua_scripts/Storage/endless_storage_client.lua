@@ -254,7 +254,7 @@ end
 local function RefreshItemList()
 	local numItems = math.floor(#currentItems / 2)
 
-	emptyText:SetShown(numItems == 0)
+	if numItems == 0 then emptyText:Show() else emptyText:Hide() end
 
 	FauxScrollFrame_Update(scrollFrame, numItems, MAX_VISIBLE_ROWS, ITEM_ROW_HEIGHT)
 	local offset = FauxScrollFrame_GetOffset(scrollFrame)
