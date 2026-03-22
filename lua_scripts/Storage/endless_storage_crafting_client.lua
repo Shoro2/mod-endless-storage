@@ -171,10 +171,11 @@ local function UpdateRecipeList()
 					if text then
 						-- Remove existing count suffix like " [2]"
 						local baseName = text:gsub(" %[%d+%]$", "")
-						btn:SetText(baseName .. " [" .. maxWithStorage .. "]")
-						-- Gold color to indicate storage contribution
 						if numAvailable == 0 then
-							btn:SetTextColor(1, 0.82, 0)
+							-- Gold color to indicate storage-only crafts
+							btn:SetText(baseName .. " |cffffcc00[" .. maxWithStorage .. "]|r")
+						else
+							btn:SetText(baseName .. " [" .. maxWithStorage .. "]")
 						end
 					end
 				end
