@@ -32,11 +32,12 @@ local searchActive = false
 local sessionLog = {} -- text entries for current session
 
 -- Forward declarations
-local logBtn, depositBtn
+local logBtn, depositBtn, searchBox
+local logShown = false
 
 -- Layout constants
 local FRAME_WIDTH = 560
-local FRAME_HEIGHT = 440
+local FRAME_HEIGHT = 470
 local CAT_WIDTH = 120
 local CAT_BTN_HEIGHT = 22
 local CAT_BTN_SPACING = 2
@@ -163,7 +164,7 @@ end
 ---------------------------------------------------------------------------
 -- Search Box (above item list)
 ---------------------------------------------------------------------------
-local searchBox = CreateFrame("EditBox", "EndlessStorageSearchBox", mainFrame, "InputBoxTemplate")
+searchBox = CreateFrame("EditBox", "EndlessStorageSearchBox", mainFrame, "InputBoxTemplate")
 searchBox:SetWidth(260)
 searchBox:SetHeight(20)
 searchBox:SetPoint("TOPLEFT", catFrame, "TOPRIGHT", 14, 2)
@@ -359,7 +360,6 @@ end)
 ---------------------------------------------------------------------------
 -- Session Log Panel (overlays item list when active)
 ---------------------------------------------------------------------------
-local logShown = false
 
 local logFrame = CreateFrame("Frame", nil, mainFrame)
 logFrame:SetPoint("TOPLEFT", catFrame, "TOPRIGHT", 8, 0)
