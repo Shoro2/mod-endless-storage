@@ -4,6 +4,7 @@
 
 ## 2026
 
+- 2026-05-01 — fix(security): validate handler args (itemEntry, catIndex, spellId, reagents) ([89d28dc](https://github.com/Shoro2/mod-endless-storage/commit/89d28dc7510bab2d380075d9a759d0bf4943c43f)) — `endless_storage_server.lua` validiert via Dep_Validation: `itemEntry`/`spellId` als positive Ints, `catIndex` (1..NUM_CATEGORIES), `searchText` Length-Limits, Reagent-Pairs vor Use. Erledigt M5 aus `todo.md`.
 - 2026-05-01 — feat(storage): UI Shift/Ctrl+Click multiplier on Take button + tooltip ([8c3496d](https://github.com/Shoro2/mod-endless-storage/commit/8c3496d03b00de9a4804059b2afa011ece099d14)) — Client-Seite: Modifier-Detection im Take-Button, Multiplier (1/10/100) wird an Server-Handler weitergegeben; Tooltip mit Erklärung der Shortcuts.
 - 2026-05-01 — feat(storage): bulk-withdraw multiplier (Shift=10, Ctrl=100 stacks) ([ac8b3b3](https://github.com/Shoro2/mod-endless-storage/commit/ac8b3b35af1d665cb1e901878d9410db023418c5)) — Server-Seite: `ES.Withdraw` akzeptiert optionalen `multiplier`-Parameter mit Whitelist `{1, 10, 100}`; total amount = `min(stored, stackSize × multiplier)`. Erledigt M6 aus `todo.md`.
 - 2026-03-22 — fix(Crafting): SetTextColor error on TradeSkill buttons ([9c89f3c](https://github.com/Shoro2/mod-endless-storage/commit/9c89f3c76a188e20f278ce59d37546b26b99d07b)) — Inline-Color-Codes statt SetTextColor-API auf TradeSkillSkill-Buttons.
