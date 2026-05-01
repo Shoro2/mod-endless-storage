@@ -11,10 +11,6 @@
 - [ ] **(niedrig)** Tab-Liste hartkodiert in `endless_storage_client.lua`: neue Subclass-Kategorien erfordern Lua-Edit. Ein server-getriebenes Tab-Layout wäre flexibler.
 - [ ] **(niedrig)** Crafting via Macro/Script ohne offenes TradeSkillFrame greift nicht auf Storage zu — Reagenz-Hook ist clientseitig. Lösungsansatz: optionalen Server-side `OnPlayerCheckReagent`-Hook (im Core bereits verfügbar) wieder aktivieren als Fallback.
 
-## Sicherheit
-
-- [ ] **(mittel)** SQL-Injection-Risiko in Lua-Layer (gleiches Eluna-Limit wie überall): `endless_storage_server.lua` baut SQL aus character_id + item_entry zusammen. character_id ist vertrauenswürdig (Server-Seite), item_entry kommt vom Client → muss als Integer geprüft werden. Validation-Lib ab 2026-05 in `share-public/AIO_Server/Dep_Validation/validation.lua` verfügbar.
-
 ## Konvention
 
 Erledigte Items NICHT durchstreichen — entfernen und in `log.md` dokumentieren.
