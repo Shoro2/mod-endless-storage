@@ -18,6 +18,14 @@ local ITEM_CLASS_GEM = 3
 local ITEM_CLASS_TRADE_GOODS = 7
 local ITEM_CLASS_RECIPE = 9
 
+-- Withdraw multipliers (stacks per click). Whitelist enforces server-side
+-- validation against client-spoofed values (Eluna has no prepared statements,
+-- but we use this only for arithmetic, not SQL — still clamp to known set).
+--   1   = normal click          (1 stack)
+--   10  = Shift+Click           (10 stacks)
+--   100 = Ctrl+Click / max-take (100 stacks — capped by stored amount)
+local VALID_MULTIPLIERS = {[1] = true, [10] = true, [100] = true}
+
 -- Category definitions (must match client-side CATEGORIES)
 -- Each category: {name, class, subclass}
 -- subclass = -1 means "all subclasses for this class"
@@ -120,8 +128,15 @@ ES.RequestData = function(player, catIndex)
 	AIO.Msg():Add("EndlessStorage", "UpdateItems", catIndex, items):Send(player)
 end
 
-ES.Withdraw = function(player, itemEntry, catIndex, searchText)
+-- Withdraw N stacks of an item (multiplier ∈ {1, 10, 100}, default 1).
+-- Total amount = min(storedAmount, stackSize * multiplier).
+ES.Withdraw = function(player, itemEntry, catIndex, searchText, multiplier)
 	local guid = player:GetGUIDLow()
+
+	-- Multiplier whitelist (defends against client-spoofed values).
+	if not VALID_MULTIPLIERS[multiplier] then
+		multiplier = 1
+	end
 
 	local result = CharDBQuery("SELECT amount FROM custom_endless_storage WHERE character_id = "..guid.." AND item_entry = "..itemEntry)
 	if not result then return end
@@ -133,7 +148,7 @@ ES.Withdraw = function(player, itemEntry, catIndex, searchText)
 	local stackSize = templateInfo.stackable
 	if stackSize < 1 then stackSize = 1 end
 
-	local withdrawAmount = math.min(storedAmount, stackSize)
+	local withdrawAmount = math.min(storedAmount, stackSize * multiplier)
 
 	-- Try to add item to player inventory
 	local added = player:AddItem(itemEntry, withdrawAmount)
