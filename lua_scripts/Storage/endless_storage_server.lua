@@ -5,6 +5,25 @@
 
 local AIO = AIO or require("AIO")
 
+-- Optional dependency: shared validation lib (share-public/AIO_Server/Dep_Validation/).
+-- Eluna lädt scripts alphabetisch, `Dep_*` kommt vor `Storage/` → Lib ist
+-- zur Loadzeit da. Ohne Lib läuft das Modul mit permissiven Shims weiter,
+-- gibt aber eine Warning aus.
+local Validate = _G.Validate
+if not Validate then
+	print("[EndlessStorage] WARNING: Dep_Validation/validation.lua nicht geladen — input validation läuft permissiv. Bitte share-public/AIO_Server/Dep_Validation/ nach lua_scripts/ deployen.")
+	Validate = {
+		IsInt = function(v) return type(v) == "number" and v == math.floor(v) end,
+		IsIntInRange = function(v, lo, hi) return type(v) == "number" and v == math.floor(v) and v >= lo and v <= hi end,
+		IsPositiveInt = function(v, cap) return type(v) == "number" and v == math.floor(v) and v >= 1 and v <= (cap or 2147483647) end,
+		IsStringInRange = function(s, lo, hi) return type(s) == "string" and #s >= lo and #s <= hi end,
+		Reject = function(player, handler, reason)
+			print(string.format("[Validate] reject handler=%s reason=%s", tostring(handler), tostring(reason)))
+			return false
+		end,
+	}
+end
+
 -- Register client addon file to be sent to players
 -- Resolve path relative to this script's location
 local scriptPath = debug.getinfo(1, 'S').source:sub(2)
@@ -25,6 +44,10 @@ local ITEM_CLASS_RECIPE = 9
 --   10  = Shift+Click           (10 stacks)
 --   100 = Ctrl+Click / max-take (100 stacks — capped by stored amount)
 local VALID_MULTIPLIERS = {[1] = true, [10] = true, [100] = true}
+
+-- Search-Text-Limits.
+local SEARCH_MIN_LEN = 2
+local SEARCH_MAX_LEN = 40
 
 -- Category definitions (must match client-side CATEGORIES)
 -- Each category: {name, class, subclass}
@@ -49,6 +72,7 @@ local CATEGORIES = {
 	{name = "Recipes",       class = 9, subclass = -1},
 	{name = "Food & Drinks", class = 0, subclass = 5},
 }
+local NUM_CATEGORIES = #CATEGORIES
 
 -- Item template cache (WorldDBQuery results)
 local itemInfoCache = {}
@@ -110,6 +134,10 @@ end
 local ES = {}
 
 ES.RequestData = function(player, catIndex)
+	if not Validate.IsIntInRange(catIndex, 1, NUM_CATEGORIES) then
+		return Validate.Reject(player, "RequestData", "catIndex out of range")
+	end
+
 	local guid = player:GetGUIDLow()
 	local where = BuildCategoryWhere(guid, catIndex)
 	if not where then return end
@@ -131,12 +159,26 @@ end
 -- Withdraw N stacks of an item (multiplier ∈ {1, 10, 100}, default 1).
 -- Total amount = min(storedAmount, stackSize * multiplier).
 ES.Withdraw = function(player, itemEntry, catIndex, searchText, multiplier)
-	local guid = player:GetGUIDLow()
+	-- itemEntry geht direkt in die WHERE-Klausel — MUSS ein positiver Int sein,
+	-- sonst SQL-Injection-Vektor. WoW-Item-Entries sind uint32, fit sich gut in 31 bit.
+	if not Validate.IsPositiveInt(itemEntry, 2147483647) then
+		return Validate.Reject(player, "Withdraw", "itemEntry not a positive int")
+	end
+	if not Validate.IsIntInRange(catIndex, 1, NUM_CATEGORIES) then
+		return Validate.Reject(player, "Withdraw", "catIndex out of range")
+	end
 
 	-- Multiplier whitelist (defends against client-spoofed values).
 	if not VALID_MULTIPLIERS[multiplier] then
 		multiplier = 1
 	end
+
+	-- searchText optional — wenn vorhanden, Length-Limit erzwingen.
+	if searchText ~= nil and not Validate.IsStringInRange(searchText, 0, SEARCH_MAX_LEN) then
+		searchText = nil
+	end
+
+	local guid = player:GetGUIDLow()
 
 	local result = CharDBQuery("SELECT amount FROM custom_endless_storage WHERE character_id = "..guid.." AND item_entry = "..itemEntry)
 	if not result then return end
@@ -178,6 +220,10 @@ ES.Withdraw = function(player, itemEntry, catIndex, searchText, multiplier)
 end
 
 ES.Deposit = function(player, catIndex)
+	if not Validate.IsIntInRange(catIndex, 1, NUM_CATEGORIES) then
+		return Validate.Reject(player, "Deposit", "catIndex out of range")
+	end
+
 	local guid = player:GetGUIDLow()
 	local deposited = {} -- {entry -> {class, subclass, amount}}
 
@@ -257,7 +303,12 @@ ES.Deposit = function(player, catIndex)
 end
 
 ES.Search = function(player, searchText)
-	if type(searchText) ~= "string" or string.len(searchText) < 2 then return end
+	-- Min-Länge 2 (kurze Suchen wären zu unspezifisch), Max-Länge SEARCH_MAX_LEN
+	-- (Schutz gegen Memory-/CPU-Floods).
+	if not Validate.IsStringInRange(searchText, SEARCH_MIN_LEN, SEARCH_MAX_LEN) then
+		return
+	end
+
 	local guid = player:GetGUIDLow()
 
 	-- Load all stored items for this character
@@ -304,14 +355,28 @@ end
 -- Handle craft request from client
 -- reagents = {entry1, countPerCraft1, entry2, countPerCraft2, ...}
 ES.CraftFromStorage = function(player, spellId, numRepeats, reagents)
+	-- spellId geht direkt in CastSpell — als positiver Int validieren.
+	if not Validate.IsPositiveInt(spellId, 2147483647) then
+		return Validate.Reject(player, "CraftFromStorage", "spellId not a positive int")
+	end
 	if not player:HasSpell(spellId) then
 		player:SendBroadcastMessage("|cffff0000You don't know this recipe!|r")
 		return
 	end
 
-	if type(numRepeats) ~= "number" or numRepeats < 1 then numRepeats = 1 end
-	if numRepeats > 20 then numRepeats = 20 end
+	if not Validate.IsIntInRange(numRepeats, 1, 20) then numRepeats = 1 end
 	if type(reagents) ~= "table" or #reagents < 2 or #reagents % 2 ~= 0 then return end
+
+	-- Reagents-Validation: jedes Paar (entry, perCraft) muss aus positiven Ints bestehen,
+	-- da `entry` direkt in WHERE-Klauseln und CastSpell-Logik verwendet wird.
+	for i = 1, #reagents, 2 do
+		if not Validate.IsPositiveInt(reagents[i], 2147483647) then
+			return Validate.Reject(player, "CraftFromStorage", "reagent entry["..i.."] not a positive int")
+		end
+		if not Validate.IsPositiveInt(reagents[i + 1], 1000) then
+			return Validate.Reject(player, "CraftFromStorage", "reagent perCraft["..(i+1).."] out of range")
+		end
+	end
 
 	local guid = player:GetGUIDLow()
 
