@@ -291,12 +291,32 @@ local function CreateItemRow(index)
 	withdrawBtn:SetScript("OnClick", function()
 		if row.itemEntry then
 			local search = searchActive and searchBox:GetText() or nil
-			AIO.Handle("EndlessStorage", "Withdraw", row.itemEntry, currentCategory, search)
+			-- Multiplier: Ctrl > Shift > none. Server-side whitelist enforces {1, 10, 100}.
+			local multiplier = 1
+			if IsControlKeyDown() then
+				multiplier = 100
+			elseif IsShiftKeyDown() then
+				multiplier = 10
+			end
+			AIO.Handle("EndlessStorage", "Withdraw", row.itemEntry, currentCategory, search, multiplier)
 		end
+	end)
+	-- Tooltip explaining the modifier shortcuts.
+	withdrawBtn:SetScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+		GameTooltip:SetText("Withdraw 1 stack")
+		GameTooltip:AddLine("|cff00ff00Shift|r+Click: 10 stacks", 1, 1, 1)
+		GameTooltip:AddLine("|cff00ff00Ctrl|r+Click: 100 stacks (max)", 1, 1, 1)
+		GameTooltip:AddLine(" ")
+		GameTooltip:AddLine("Capped at the available stored amount.", 0.7, 0.7, 0.7)
+		GameTooltip:Show()
+	end)
+	withdrawBtn:SetScript("OnLeave", function()
+		GameTooltip:Hide()
 	end)
 	row.withdrawBtn = withdrawBtn
 
-	-- Tooltip on hover
+	-- Tooltip on hover (item info)
 	row:SetScript("OnEnter", function(self)
 		if self.itemEntry then
 			GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
