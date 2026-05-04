@@ -1,44 +1,44 @@
 # mod-endless-storage
 
-> Lies zuerst [`INDEX.md`](./INDEX.md). Mechanik & AIO-Handler: [`functions.md`](./functions.md). Folder-Layout: [`data_structure.md`](./data_structure.md). Offenes: [`todo.md`](./todo.md). Commit-Spur: [`log.md`](./log.md).
+> Read [`INDEX.md`](./INDEX.md) first. Mechanics & AIO handlers: [`functions.md`](./functions.md). Folder layout: [`data_structure.md`](./data_structure.md). Open items: [`todo.md`](./todo.md). Commit trail: [`log.md`](./log.md).
 
-## Was ist das Modul?
+## What is the module?
 
-AzerothCore-Modul für **WoW 3.3.5a (WotLK)**. Bietet ein server-seitiges, **unbegrenztes Materiallager** für Crafting-Verbrauchsgüter, Gems und Rezepte. Spieler hinterlegen ihre Trade-Goods/Gems/Recipes per Klick, rufen sie tab-weise wieder ab — alles über eine vollwertige WoW-AIO-UI (kein NPC, kein Gossip-Menü).
+AzerothCore module for **WoW 3.3.5a (WotLK)**. Provides a server-side, **unlimited material storage** for crafting consumables, gems, and recipes. Players deposit their Trade Goods/gems/recipes with one click and retrieve them per-tab — all through a full WoW AIO UI (no NPC, no gossip menu).
 
-Funktional verwandt mit [`mod-reagent-bank`](https://github.com/Shoro2/mod-reagent-bank), aber mit echter Frame-UI statt Gossip und einem zusätzlichen Rezepte-Tab.
+Functionally related to [`mod-reagent-bank`](https://github.com/Shoro2/mod-reagent-bank), but with a real frame UI instead of a gossip and an additional recipes tab.
 
-## Rolle im Gesamtprojekt
+## Role in the overall project
 
-Dieses Modul ist eigenständig — es hat **keine** harten Abhängigkeiten zu anderen Custom-Modulen. Beziehungen:
+The module is standalone — it has **no** hard dependencies on other custom modules. Relations:
 
-| Modul | Beziehung |
+| Module | Relation |
 |-------|-----------|
-| `mod-auto-loot` | wenn aktiv: gelootete Trade-Goods landen im Inventar; der Spieler deponiert sie dann manuell per "Deposit All" in den Storage |
-| `mod-loot-filter` | optional: kann eine Filter-Regel "Keep" auf Trade-Goods setzen, damit sie nicht versehentlich gesellt werden, und dann manuell in den Storage gehen |
+| `mod-auto-loot` | when active: looted Trade Goods land in the inventory; the player then deposits them manually via "Deposit All" into storage |
+| `mod-loot-filter` | optional: can apply a "Keep" filter rule to Trade Goods so they aren't accidentally sold, then move them to storage manually |
 
-Das Modul **eskaliert** das Reagenz-Inventar: wenn der Player eine Crafting-Aktion durchführt, kann die UI-Seite Reagenzien transparent aus dem Storage ziehen (Details: [`functions.md`](./functions.md)).
+The module **expands** the reagent inventory: when the player performs a crafting action, the UI side can transparently pull reagents from storage (details: [`functions.md`](./functions.md)).
 
-## Custom-Daten
+## Custom data
 
-| Typ | Eintrag | Bemerkung |
+| Type | Entry | Note |
 |-----|--------|-----------|
-| **DB-Tabelle (acore_characters)** | `custom_endless_storage` | PK `(character_id, item_entry)`, plus `item_subclass`, `item_class`, `amount` |
-| **DBC-Patches** | keine | |
-| **Custom-Spells/NPCs/Items** | keine | |
-| **AIO-Handler-Namen** | `EndlessStorage` (Server) / `ES_Client` (Client) | Details: [`functions.md`](./functions.md#aio-handler) |
-| **Slash-Commands** | `/es`, `/storage` | öffnen die Storage-UI |
-| **GM-Commands** | keine | |
+| **DB table (acore_characters)** | `custom_endless_storage` | PK `(character_id, item_entry)`, plus `item_subclass`, `item_class`, `amount` |
+| **DBC patches** | none | |
+| **Custom spells/NPCs/items** | none | |
+| **AIO handler names** | `EndlessStorage` (server) / `ES_Client` (client) | Details: [`functions.md`](./functions.md#aio-handler) |
+| **Slash commands** | `/es`, `/storage` | open the storage UI |
+| **GM commands** | none | |
 
-## Akzeptierte Item-Klassen
+## Accepted item classes
 
-| Klasse | Bedingung | Tab |
+| Class | Condition | Tab |
 |--------|-----------|-----|
-| `ITEM_CLASS_TRADE_GOODS` (7) | `MaxStackSize > 1` | nach Subclass (15 Material-Tabs) |
-| `ITEM_CLASS_GEM` (3) | `MaxStackSize > 1` | Jewelcrafting-Tab |
-| `ITEM_CLASS_RECIPE` (9) | alle | Rezepte-Tab |
+| `ITEM_CLASS_TRADE_GOODS` (7) | `MaxStackSize > 1` | by subclass (15 material tabs) |
+| `ITEM_CLASS_GEM` (3) | `MaxStackSize > 1` | Jewelcrafting tab |
+| `ITEM_CLASS_RECIPE` (9) | all | Recipes tab |
 
-## UI-Layout (Top-Level)
+## UI layout (top level)
 
 ```
 +--------------------------------------------------+
@@ -47,26 +47,26 @@ Das Modul **eskaliert** das Reagenz-Inventar: wenn der Player eine Crafting-Akti
 | Parts    | [icon] Item Name           x100 [Take]|
 | Cloth    | [icon] Item Name            x50 [Take]|
 | Leather  | [icon] Item Name           x200 [Take]|
-| ...      | (FauxScrollFrame, 11 sichtbare Zeilen)|
+| ...      | (FauxScrollFrame, 11 visible rows)    |
 | Recipes  |                                       |
 +----------+---------------------------------------+
 |          [ Deposit All Materials ]               |
 +--------------------------------------------------+
 ```
 
-Frame ist 560×440, draggable, ESC-close. Position ist account-weit gespeichert (LibWindow).
+The frame is 560×440, draggable, ESC-close. Position is stored account-wide (LibWindow).
 
-## Was das Modul **nicht** tut
+## What this module does **not** do
 
-- **kein** Equipment-Storage, kein Gold-Storage — nur die oben gelisteten Item-Klassen
-- **kein** Auction-House-Forwarding
-- **kein** Storage-Sharing zwischen Charakteren des selben Accounts (aktuell strikt per Character)
-- **kein** Bulk-Withdraw via UI (Shift+Click etc.) — siehe [`todo.md`](./todo.md)
+- **no** equipment storage, no gold storage — only the item classes listed above
+- **no** auction house forwarding
+- **no** storage sharing between characters of the same account (currently strictly per character)
+- **no** bulk withdraw via the UI (Shift+click etc.) — see [`todo.md`](./todo.md)
 
-## Hinweise zur aktuellen Architektur
+## Notes on the current architecture
 
-Das Modul lief in einer früheren Phase (vor März 2026) mit einem zusätzlichen C++-Layer (`mod_endless_storage_crafting.cpp`) für die Crafting-Reagenz-Integration über `OnPlayerCheckReagent` / `OnPlayerConsumeReagent`. Diese Hooks **existieren weiterhin im Core** (`azerothcore-wotlk`), das Modul nutzt sie aber aktuell **nicht aktiv** — die Crafting-Anbindung läuft über einen Lua-/Client-Pfad. Konsultiere [`functions.md`](./functions.md) für den verbindlich aktuellen Stand.
+In an earlier phase (before March 2026) the module ran with an additional C++ layer (`mod_endless_storage_crafting.cpp`) for crafting reagent integration via `OnPlayerCheckReagent` / `OnPlayerConsumeReagent`. These hooks **still exist in the core** (`azerothcore-wotlk`), but the module **no longer uses them actively** — the crafting integration runs through a Lua/client path. Consult [`functions.md`](./functions.md) for the authoritative current state.
 
-## Lizenz
+## License
 
 GPL v2.

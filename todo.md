@@ -1,16 +1,16 @@
 # TODOs — mod-endless-storage
 
-> Offene Aufgaben für dieses Modul. Erledigte TODOs in `log.md` festhalten und hier entfernen.
+> Open tasks for this module. Record completed TODOs in `log.md` and remove them here.
 
-## Doku-Drift (in Phase B beheben)
+## Doc drift (to be fixed in phase B)
 
-- [ ] **(hoch)** `CLAUDE.md` ist gegenüber dem März-2026-Rewrite **veraltet**: beschreibt entfernte C++-Crafting-Hooks (`mod_endless_storage_crafting.cpp` existiert nicht mehr; Crafting läuft komplett über Lua/AIO). Wird im Rahmen der projekt-weiten Phase B (CLAUDE.md-Schlankheitskur) korrigiert.
+- [ ] **(high)** `CLAUDE.md` is **out of date** compared to the March 2026 rewrite: it describes removed C++ crafting hooks (`mod_endless_storage_crafting.cpp` no longer exists; crafting runs entirely through Lua/AIO). Will be corrected as part of the project-wide phase B (CLAUDE.md slim-down).
 
-## Funktionale Verbesserungen
+## Functional improvements
 
-- [ ] **(niedrig)** Tab-Liste hartkodiert in `endless_storage_client.lua`: neue Subclass-Kategorien erfordern Lua-Edit. Ein server-getriebenes Tab-Layout wäre flexibler.
-- [ ] **(niedrig)** Crafting via Macro/Script ohne offenes TradeSkillFrame greift nicht auf Storage zu — Reagenz-Hook ist clientseitig. Lösungsansatz: optionalen Server-side `OnPlayerCheckReagent`-Hook (im Core bereits verfügbar) wieder aktivieren als Fallback.
+- [ ] **(low)** Tab list hard-coded in `endless_storage_client.lua`: new subclass categories require a Lua edit. A server-driven tab layout would be more flexible.
+- [ ] **(low)** Crafting via macro/script without an open TradeSkillFrame does not access storage — the reagent hook is client-side. Possible solution: re-enable the optional server-side `OnPlayerCheckReagent` hook (already available in the core) as a fallback.
 
-## Konvention
+## Convention
 
-Erledigte Items NICHT durchstreichen — entfernen und in `log.md` dokumentieren.
+Do NOT cross out completed items — remove them and document them in `log.md`.
