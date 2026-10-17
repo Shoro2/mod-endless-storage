@@ -1,74 +1,54 @@
 # mod-endless-storage
 
-Unlimited per-character material, gem, and recipe storage for an [AzerothCore](https://www.azerothcore.org/) **WoW 3.3.5a (WotLK)** server.
+Unlimited per-character material, gem and recipe storage for an [AzerothCore](https://www.azerothcore.org/) **WoW 3.3.5a (WotLK)** server. Part of the Forgotten Land server project.
 
-## What it does
+The module adds a server-side **bottomless storage** for crafting consumables. Players deposit their Trade Goods, gems and recipes from their bags with one click and take them out again from a tabbed in-game window: no NPC, no gossip menu, no bag-space pressure. The module is Lua-only (Lua engine + AIO); the C++ part is an empty loader stub that just registers the module with the build system.
 
-Adds a server-side **bottomless storage** for crafting consumables. Players deposit all of their Trade Goods, gems, and recipes from their bags with a single click, and retrieve them later from a tabbed in-game UI — no NPC, no gossip menu, no bag-space pressure.
+## Features
 
-Items are organized automatically:
+- **One-click deposit** of eligible items from the bags.
+- **Tabbed window** with material categories (Parts, Explosives, Devices, Gems & JC, Cloth, Leather, Metal & Stone, Meat, Herb, Elemental, Other, Enchanting, Materials, Armor/Weapon Vellum), a Recipes tab and a Food & Drinks tab.
+- Scrollable lists with item icon, name, stack count and a "Take" button per row; Shift/Ctrl-click withdraws 10 / 100 stacks at once.
+- Item search and an activity log.
+- **Crafting integration**: the profession window shows how many crafts are possible from bags plus storage, and "Create" / "Create All" buttons craft from storage.
+- No NPC needed: the window opens with `/es` or `/storage`.
+- State in `acore_characters.custom_endless_storage` (key `character_id` + `item_entry`); storage is per character.
+- The UI is delivered to the client by [AIO](https://github.com/Rochet2/AIO), no manual addon installation.
 
-| Item class | Condition | Storage tab |
-|------------|-----------|-------------|
-| Trade Goods (`ITEM_CLASS_TRADE_GOODS`) | `MaxStackSize > 1` | one of 15 material tabs (by subclass: Cloth, Leather, Metal & Stone, Herb, …) |
-| Gems (`ITEM_CLASS_GEM`) | `MaxStackSize > 1` | Jewelcrafting tab |
-| Recipes (`ITEM_CLASS_RECIPE`) | all | Recipes tab |
+Accepted items: Trade Goods and gems with a stack size above 1, all recipes, and stackable food and drinks.
 
-Stored amounts are per character.
+## Requirements
 
-## Key features
-
-- **One-click deposit** of all eligible items currently in the player's bags
-- **Tabbed UI** with 15 material categories + a jewelcrafting tab + a recipes tab
-- **Scrollable lists** with item icon, name, stack count, and a "Take" button per row
-- **Draggable, ESC-closeable frame** (560×440), position stored account-wide via LibWindow
-- **No NPC required** — the UI opens via the `/es` or `/storage` slash command
-- **Database-backed** in `acore_characters.custom_endless_storage` (PK `(character_id, item_entry)`)
-- Fully delivered to the client via the [AIO framework](https://github.com/Rochet2/AIO) — no manual addon installation per item
+- AzerothCore WotLK (upstream is sufficient; the module has no C++ logic).
+- A Lua engine module ([mod-ale](https://github.com/azerothcore/mod-ale), Eluna-compatible) and the [AIO framework](https://github.com/Rochet2/AIO) (server side and client addon).
 
 ## Installation
 
-1. Place this module inside the AzerothCore `modules/` directory:
+1. Clone the module into the `modules/` directory of the server source:
    ```bash
    cd azerothcore-wotlk/modules
    git clone https://github.com/Shoro2/mod-endless-storage.git
    ```
-2. Re-run CMake and build the server:
-   ```bash
-   cd ../build
-   cmake .. -DCMAKE_INSTALL_PREFIX=$HOME/azeroth-server \
-            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-            -DSCRIPTS=static -DMODULES=static
-   make -j$(nproc) && make install
-   ```
-3. Apply the SQL files shipped under `data/sql/db-characters/` (the AzerothCore SQL updater picks them up automatically).
-4. The client side requires the [AIO addon](https://github.com/Rochet2/AIO) installed in `Interface/AddOns/`. The storage UI ships with this module's Lua sources and is delivered to the client by AIO automatically.
-5. Restart the world server. In-game, type `/es` or `/storage` to open the UI.
+2. Re-run CMake and rebuild the server.
+3. SQL: `data/sql/db-characters/base/create_tables.sql` creates the storage table; the AzerothCore DB updater applies it on the next server start.
+4. Copy the `lua_scripts/Storage/` folder (`endless_storage_server.lua`, `endless_storage_client.lua`, `endless_storage_crafting_client.lua`) into the server's `lua_scripts/` folder. AIO sends the client files to players, who need the AIO client addon.
+5. Optional: copy `conf/endless_storage.conf.dist` to your server's module config folder as `endless_storage.conf`.
+6. Restart the world server. In game, type `/es` or `/storage`.
+
+## Configuration
+
+`conf/endless_storage.conf.dist` ships one key, `EndlessStorage.Enable` (default `1`). The Lua-only implementation does not read it; to switch the module off, remove the `Storage` folder from `lua_scripts/`.
 
 ## Usage
 
-- `/es` or `/storage` — open the storage frame
-- Click **Deposit All Materials** to move every eligible stack from your bags into storage
-- Click **Take** on any row to retrieve the full stack into your inventory
-- Use the left-side tabs to navigate between materials, gems, and recipes
+- `/es` or `/storage` - open the storage window.
+- **Deposit All Materials** moves eligible items from the bags into storage.
+- **Take** on a row withdraws a stack (Shift: 10 stacks, Ctrl: 100 stacks, capped by the stored amount).
+- Left-hand tabs switch between material categories, recipes and food & drinks.
+- With a profession window open, the "Create" buttons craft using reagents from storage; this path needs the open profession window.
 
 ## Limitations
 
-- Only the listed item classes are accepted (no equipment, no gold, no consumables outside Trade Goods/gems/recipes)
-- Storage is strictly per character — no account-wide sharing
-- No bulk withdraw via Shift+click (planned)
-- No auction house forwarding
-
-## Requirements
-
-- [AzerothCore](https://github.com/azerothcore/azerothcore-wotlk) (WoW 3.3.5a / WotLK)
-- [AIO framework](https://github.com/Rochet2/AIO) — for the in-game UI
-
-## Optional integrations
-
-- [mod-auto-loot](https://github.com/Shoro2/mod-auto-loot) — Trade Goods land in the inventory; deposit them in one click via "Deposit All"
-- [mod-loot-filter](https://github.com/Shoro2/mod-loot-filter) — apply a "Keep" rule on Trade Goods so they aren't accidentally sold
-
-## License
-
-GPL v2 (see `LICENSE`).
+- Only the item classes above are accepted (no equipment, gold or other consumables).
+- Storage is per character, not shared across the account.
+- No auction house forwarding.
