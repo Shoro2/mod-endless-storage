@@ -24,12 +24,11 @@ if not Validate then
 	}
 end
 
--- Register client addon file to be sent to players
--- Resolve path relative to this script's location
-local scriptPath = debug.getinfo(1, 'S').source:sub(2)
-local scriptDir = scriptPath:match("(.*[/\\])") or ""
-AIO.AddAddon(scriptDir .. "endless_storage_client.lua")
-AIO.AddAddon(scriptDir .. "endless_storage_crafting_client.lua")
+-- The two client files register themselves ("if AIO.AddAddon() then return end"
+-- runs when Eluna loads them). Registering them here as well made AIO send each
+-- one twice - AIO.AddAddonCode does not deduplicate - so the client built two
+-- storage windows, and the other copy's refresh (ES_RefreshCurrentView, called
+-- after every Take) asked for its own first tab, "Parts" (report 2026-10-28).
 
 -- Constants
 local ITEM_CLASS_CONSUMABLE = 0
