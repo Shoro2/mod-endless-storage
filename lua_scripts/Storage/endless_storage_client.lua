@@ -4,6 +4,10 @@
 --
 if AIO.AddAddon() then return end
 
+-- FLUI (fl-lua-scripts AIO_UI/, the Forgotten Land window kit) draws the
+-- window in the player's theme.
+local FLUI = assert(FLUI, "Endless Storage needs AIO_UI/FLUI_Client.lua loaded first")
+
 -- Category definitions (must match server-side CATEGORIES order)
 local CATEGORIES = {
 	"Parts",
@@ -37,13 +41,13 @@ local logShown = false
 
 -- Layout constants
 local FRAME_WIDTH = 560
-local FRAME_HEIGHT = 470
+local FRAME_HEIGHT = 484
 local CAT_WIDTH = 120
 local CAT_BTN_HEIGHT = 22
 local CAT_BTN_SPACING = 2
 local ITEM_ROW_HEIGHT = 30
 local MAX_VISIBLE_ROWS = 11
-local CONTENT_TOP = -30
+local CONTENT_TOP = -(FLUI.HEADER + 4)
 local CONTENT_BOTTOM = 40
 
 -- Item quality colors
@@ -60,37 +64,13 @@ local QUALITY_COLORS = {
 ---------------------------------------------------------------------------
 -- Main Frame
 ---------------------------------------------------------------------------
-local mainFrame = CreateFrame("Frame", "EndlessStorageFrame", UIParent)
-mainFrame:SetWidth(FRAME_WIDTH)
-mainFrame:SetHeight(FRAME_HEIGHT)
-mainFrame:SetPoint("CENTER", 0, 0)
-mainFrame:SetBackdrop({
-	bgFile = "Interface/DialogFrame/UI-DialogBox-Background",
-	edgeFile = "Interface/DialogFrame/UI-DialogBox-Border",
-	tile = true, tileSize = 32, edgeSize = 32,
-	insets = {left = 11, right = 12, top = 12, bottom = 11}
+-- Movable, ESC closes, no saved position (as before)
+local mainFrame = FLUI.Window("EndlessStorageFrame", {
+	width = FRAME_WIDTH, height = FRAME_HEIGHT, point = { "CENTER", 0, 0 },
+	title = "Endless Storage", icon = "Interface/Icons/INV_Crate_04",
+	savePosition = false,
 })
-mainFrame:SetBackdropColor(0, 0, 0, 0.9)
-mainFrame:EnableMouse(true)
-mainFrame:SetMovable(true)
-mainFrame:RegisterForDrag("LeftButton")
-mainFrame:SetScript("OnDragStart", mainFrame.StartMoving)
-mainFrame:SetScript("OnDragStop", mainFrame.StopMovingOrSizing)
-mainFrame:SetClampedToScreen(true)
-mainFrame:SetFrameStrata("DIALOG")
-mainFrame:Hide()
-
--- ESC to close
-tinsert(UISpecialFrames, "EndlessStorageFrame")
-
--- Title
-local titleText = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-titleText:SetPoint("TOP", 0, -14)
-titleText:SetText("Endless Storage")
-
--- Close button
-local closeBtn = CreateFrame("Button", nil, mainFrame, "UIPanelCloseButton")
-closeBtn:SetPoint("TOPRIGHT", -5, -5)
+local closeBtn = mainFrame.close
 
 ---------------------------------------------------------------------------
 -- Category Panel (Left Side)
@@ -104,21 +84,26 @@ local categoryButtons = {}
 
 local HideLog -- forward declaration
 
+-- Marks the category index (nil: none) as the chosen one.
+local function MarkCategory(index)
+	for i, btn in ipairs(categoryButtons) do
+		if i == index then
+			btn.sel:Show()
+			btn.text:SetTextColor(1, 1, 1)
+		else
+			btn.sel:Hide()
+			btn.text:SetTextColor(0.8, 0.8, 0.8)
+		end
+	end
+end
+
 local function SelectCategory(index)
 	currentCategory = index
 	searchActive = false
 	if HideLog then HideLog() end
 	searchBox:SetText("")
 	searchBox:ClearFocus()
-	for i, btn in ipairs(categoryButtons) do
-		if i == index then
-			btn:SetBackdropColor(0.2, 0.3, 0.6, 1)
-			btn.text:SetTextColor(1, 1, 1)
-		else
-			btn:SetBackdropColor(0.1, 0.1, 0.1, 0.6)
-			btn.text:SetTextColor(0.8, 0.8, 0.8)
-		end
-	end
+	MarkCategory(index)
 	-- Request data from server
 	AIO.Handle("EndlessStorage", "RequestData", index)
 end
@@ -135,14 +120,9 @@ for i, catName in ipairs(CATEGORIES) do
 	btn:SetWidth(CAT_WIDTH)
 	btn:SetHeight(CAT_BTN_HEIGHT)
 	btn:SetPoint("TOPLEFT", 0, -((i - 1) * (CAT_BTN_HEIGHT + CAT_BTN_SPACING)))
-	btn:SetBackdrop({
-		bgFile = "Interface/Buttons/WHITE8x8",
-		edgeFile = "Interface/Buttons/WHITE8x8",
-		edgeSize = 1,
-		insets = {left = 1, right = 1, top = 1, bottom = 1}
-	})
-	btn:SetBackdropColor(0.1, 0.1, 0.1, 0.6)
-	btn:SetBackdropBorderColor(0.3, 0.3, 0.3, 0.8)
+	btn.sel = FLUI.Selection(btn)
+	btn.sel:Hide()
+	FLUI.Hover(btn)
 
 	local text = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 	text:SetPoint("LEFT", 6, 0)
@@ -152,17 +132,6 @@ for i, catName in ipairs(CATEGORIES) do
 
 	btn:SetScript("OnClick", function()
 		SelectCategory(i)
-	end)
-
-	btn:SetScript("OnEnter", function(self)
-		if i ~= currentCategory then
-			self:SetBackdropColor(0.15, 0.2, 0.4, 0.8)
-		end
-	end)
-	btn:SetScript("OnLeave", function(self)
-		if i ~= currentCategory then
-			self:SetBackdropColor(0.1, 0.1, 0.1, 0.6)
-		end
 	end)
 
 	categoryButtons[i] = btn
@@ -197,10 +166,7 @@ searchBox:SetScript("OnTextChanged", function(self)
 		if string.len(text) >= 2 then
 			searchActive = true
 			-- Deselect all category buttons
-			for i, btn in ipairs(categoryButtons) do
-				btn:SetBackdropColor(0.1, 0.1, 0.1, 0.6)
-				btn.text:SetTextColor(0.8, 0.8, 0.8)
-			end
+			MarkCategory(nil)
 			AIO.Handle("EndlessStorage", "Search", text)
 		end
 	end
@@ -220,19 +186,9 @@ end)
 ---------------------------------------------------------------------------
 -- Item List Panel (Right Side)
 ---------------------------------------------------------------------------
-local listFrame = CreateFrame("Frame", nil, mainFrame)
+local listFrame = FLUI.Panel(mainFrame)
 listFrame:SetPoint("TOPLEFT", catFrame, "TOPRIGHT", 8, -24)
 listFrame:SetPoint("BOTTOMRIGHT", mainFrame, "BOTTOMRIGHT", -16, CONTENT_BOTTOM)
-
--- Background for item list
-listFrame:SetBackdrop({
-	bgFile = "Interface/Buttons/WHITE8x8",
-	edgeFile = "Interface/Buttons/WHITE8x8",
-	edgeSize = 1,
-	insets = {left = 1, right = 1, top = 1, bottom = 1}
-})
-listFrame:SetBackdropColor(0.05, 0.05, 0.05, 0.7)
-listFrame:SetBackdropBorderColor(0.3, 0.3, 0.3, 0.8)
 
 -- Scroll frame
 local scrollFrame = CreateFrame("ScrollFrame", "EndlessStorageScrollFrame", listFrame, "FauxScrollFrameTemplate")
@@ -254,10 +210,7 @@ local function CreateItemRow(index)
 	row:SetPoint("RIGHT", scrollFrame, "RIGHT", 0, 0)
 
 	-- Highlight on hover
-	local highlight = row:CreateTexture(nil, "HIGHLIGHT")
-	highlight:SetAllPoints()
-	highlight:SetTexture("Interface/Buttons/WHITE8x8")
-	highlight:SetVertexColor(0.3, 0.3, 0.5, 0.3)
+	FLUI.Hover(row)
 
 	-- Item icon
 	local icon = row:CreateTexture(nil, "ARTWORK")
@@ -283,11 +236,8 @@ local function CreateItemRow(index)
 	row.amountText = amountText
 
 	-- Withdraw button
-	local withdrawBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-	withdrawBtn:SetWidth(55)
-	withdrawBtn:SetHeight(22)
+	local withdrawBtn = FLUI.Button(row, "Take", 55, 22)
 	withdrawBtn:SetPoint("RIGHT", row, "RIGHT", -4, 0)
-	withdrawBtn:SetText("Take")
 	withdrawBtn:SetScript("OnClick", function()
 		if row.itemEntry then
 			local search = searchActive and searchBox:GetText() or nil
@@ -388,17 +338,9 @@ end)
 -- Session Log Panel (overlays item list when active)
 ---------------------------------------------------------------------------
 
-local logFrame = CreateFrame("Frame", nil, mainFrame)
+local logFrame = FLUI.Panel(mainFrame)
 logFrame:SetPoint("TOPLEFT", catFrame, "TOPRIGHT", 8, 0)
 logFrame:SetPoint("BOTTOMRIGHT", mainFrame, "BOTTOMRIGHT", -16, CONTENT_BOTTOM)
-logFrame:SetBackdrop({
-	bgFile = "Interface/Buttons/WHITE8x8",
-	edgeFile = "Interface/Buttons/WHITE8x8",
-	edgeSize = 1,
-	insets = {left = 1, right = 1, top = 1, bottom = 1}
-})
-logFrame:SetBackdropColor(0.05, 0.05, 0.05, 0.7)
-logFrame:SetBackdropBorderColor(0.3, 0.3, 0.3, 0.8)
 logFrame:Hide()
 
 local logScrollFrame = CreateFrame("ScrollFrame", "EndlessStorageLogScroll", logFrame, "UIPanelScrollFrameTemplate")
@@ -448,12 +390,8 @@ local function ShowLog()
 	logFrame:Show()
 	depositBtn:Hide()
 	-- Deselect all category buttons, highlight log
-	for i, btn in ipairs(categoryButtons) do
-		btn:SetBackdropColor(0.1, 0.1, 0.1, 0.6)
-		btn.text:SetTextColor(0.8, 0.8, 0.8)
-	end
-	logBtn:SetBackdropColor(0.2, 0.3, 0.6, 1)
-	logBtn.text:SetTextColor(1, 1, 1)
+	MarkCategory(nil)
+	logBtn:SetSelected(true)
 	RefreshLog()
 end
 
@@ -463,28 +401,12 @@ HideLog = function()
 	listFrame:Show()
 	searchBox:Show()
 	depositBtn:Show()
-	logBtn:SetBackdropColor(0.1, 0.1, 0.1, 0.6)
-	logBtn.text:SetTextColor(0.8, 0.8, 0.8)
+	logBtn:SetSelected(false)
 end
 
--- Log category button (at bottom of category panel)
-logBtn = CreateFrame("Button", nil, mainFrame)
-logBtn:SetWidth(80)
-logBtn:SetHeight(20)
+-- Session log button (beside the close button)
+logBtn = FLUI.Button(mainFrame, "Log", 80, 20, nil, { small = true })
 logBtn:SetPoint("RIGHT", closeBtn, "LEFT", -2, 0)
-logBtn:SetBackdrop({
-	bgFile = "Interface/Buttons/WHITE8x8",
-	edgeFile = "Interface/Buttons/WHITE8x8",
-	edgeSize = 1,
-	insets = {left = 1, right = 1, top = 1, bottom = 1}
-})
-logBtn:SetBackdropColor(0.1, 0.1, 0.1, 0.6)
-logBtn:SetBackdropBorderColor(0.3, 0.3, 0.3, 0.8)
-
-logBtn.text = logBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-logBtn.text:SetPoint("CENTER", 0, 0)
-logBtn.text:SetText("|cffaaaaaaLog|r")
-logBtn.text:SetTextColor(0.8, 0.8, 0.8)
 
 logBtn:SetScript("OnClick", function()
 	if logShown then
@@ -492,16 +414,6 @@ logBtn:SetScript("OnClick", function()
 		SelectCategory(currentCategory)
 	else
 		ShowLog()
-	end
-end)
-logBtn:SetScript("OnEnter", function(self)
-	if not logShown then
-		self:SetBackdropColor(0.15, 0.2, 0.4, 0.8)
-	end
-end)
-logBtn:SetScript("OnLeave", function(self)
-	if not logShown then
-		self:SetBackdropColor(0.1, 0.1, 0.1, 0.6)
 	end
 end)
 
@@ -516,11 +428,8 @@ end
 ---------------------------------------------------------------------------
 -- Deposit Button
 ---------------------------------------------------------------------------
-depositBtn = CreateFrame("Button", nil, mainFrame, "UIPanelButtonTemplate")
-depositBtn:SetWidth(200)
-depositBtn:SetHeight(28)
+depositBtn = FLUI.Button(mainFrame, "Deposit All Materials", 200, 28)
 depositBtn:SetPoint("BOTTOM", 0, 14)
-depositBtn:SetText("Deposit All Materials")
 depositBtn:SetScript("OnClick", function()
 	AIO.Handle("EndlessStorage", "Deposit", currentCategory)
 end)
@@ -579,15 +488,7 @@ ES_Client.UpdateItems = function(player, catIndex, items)
 	if not searchActive then
 		currentCategory = catIndex
 		-- Update category button highlight
-		for i, btn in ipairs(categoryButtons) do
-			if i == catIndex then
-				btn:SetBackdropColor(0.2, 0.3, 0.6, 1)
-				btn.text:SetTextColor(1, 1, 1)
-			else
-				btn:SetBackdropColor(0.1, 0.1, 0.1, 0.6)
-				btn.text:SetTextColor(0.8, 0.8, 0.8)
-			end
-		end
+		MarkCategory(catIndex)
 	end
 	RefreshItemList()
 end
